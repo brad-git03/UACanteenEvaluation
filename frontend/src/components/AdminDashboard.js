@@ -256,7 +256,7 @@ export default function AdminDashboard({ navigate }) {
   );
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f9f7f1', position: 'relative' }}>
+    <div className="admin-layout" style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f9f7f1', position: 'relative' }}>
       
       <style>{`
         @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.2); } 100% { opacity: 1; transform: scale(1); } }
@@ -264,7 +264,7 @@ export default function AdminDashboard({ navigate }) {
       `}</style>
 
       {/* SIDEBAR */}
-      <div style={{ width: '280px', background: 'linear-gradient(180deg, var(--bg-dark-green) 0%, #050d21 100%)', color: 'white', padding: '40px 25px', display: 'flex', flexDirection: 'column' }}>
+      <div className="admin-sidebar" style={{ width: '280px', background: 'linear-gradient(180deg, var(--bg-dark-green) 0%, #050d21 100%)', color: 'white', padding: '40px 25px', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '45px' }}>
           <img src="/ua-logo.png" alt="University Logo" style={{ width: '46px', height: '46px', borderRadius: '50%', boxShadow: '0 4px 12px rgba(0,0,0,0.4)', border: '2px solid rgba(255,255,255,0.1)' }} />
           <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -294,7 +294,7 @@ export default function AdminDashboard({ navigate }) {
         </div>
       </div>
 
-      <div style={{ flex: 1, padding: '50px 60px', overflowY: 'auto' }}>
+      <div className="admin-content" style={{ flex: 1, padding: '50px 60px', overflowY: 'auto' }}>
 
         {/* ---------------- VIEW 1: DASHBOARD ---------------- */}
         {activeMenu === "dashboard" && (
@@ -313,7 +313,7 @@ export default function AdminDashboard({ navigate }) {
             <h1 className="serif" style={{ fontSize: '2.5rem', marginBottom: '10px' }}>Dashboard <span style={{ color: 'var(--accent-gold)' }}>Overview</span></h1>
             <p style={{ color: '#666', marginBottom: '40px', fontSize: '16px' }}>Real-time verified insights from PostgreSQL.</p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', marginBottom: '40px' }}>
+            <div className="admin-grid-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', marginBottom: '40px' }}>
               <div className="card" style={{ borderTop: '5px solid var(--bg-dark-green)', padding: '30px' }}>
                 <div style={{ fontSize: '14px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Verified Records</div>
                 <div className="serif" style={{ fontSize: '2.8rem', color: 'var(--bg-dark-green)' }}>{total}</div>
@@ -346,7 +346,7 @@ export default function AdminDashboard({ navigate }) {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '60% 40%', gap: '24px', marginBottom: '30px' }}>
+            <div className="admin-grid-charts" style={{ display: 'grid', gridTemplateColumns: '60% 40%', gap: '24px', marginBottom: '30px' }}>
               <div className="card" style={{ padding: '35px' }}>
                 <h3 style={{ fontSize: '16px', textTransform: 'uppercase', color: '#666', marginBottom: '30px', letterSpacing: '0.5px' }}>Category Averages</h3>
                 {count === 0 ? (
@@ -371,7 +371,7 @@ export default function AdminDashboard({ navigate }) {
                 {total === 0 ? (
                   <div style={{ height: '250px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '16px' }}>No safe records available.</div>
                 ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: '58% 42%', alignItems: 'center', gap: '8px' }}>
+                  <div className="admin-grid-pie" style={{ display: 'grid', gridTemplateColumns: '58% 42%', alignItems: 'center', gap: '8px' }}>
                     <div style={{ height: '320px', width: '100%', position: 'relative' }}>
                       <ResponsiveContainer>
                         <PieChart>
@@ -417,7 +417,7 @@ export default function AdminDashboard({ navigate }) {
         {/* ---------------- VIEW 2: SAFE RECORDS ---------------- */}
         {activeMenu === "records" && (
           <div className="card animate-in" style={{ minHeight: '80vh', padding: '40px', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
+            <div className="admin-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
               <div>
                 <h1 className="serif" style={{ fontSize: '2.2rem', marginBottom: '10px' }}>Safe Customer Feedback</h1>
                 <p style={{ color: '#666', fontSize: '16px' }}>Only cryptographically verified authentic records are shown here.</p>
@@ -478,7 +478,7 @@ export default function AdminDashboard({ navigate }) {
         {/* ---------------- VIEW 3: SECURITY AUDITOR LOGS ---------------- */}
         {activeMenu === "verify" && (
           <div className="card animate-in" style={{ minHeight: '80vh', padding: '40px', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
+            <div className="admin-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
               <div>
                 <h1 className="serif" style={{ fontSize: '2.2rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <ShieldCheck size={32} color="var(--bg-dark-green)" /> Cryptographic Audit Logs
@@ -579,7 +579,7 @@ export default function AdminDashboard({ navigate }) {
         {/* ---------------- VIEW 4: THE QUARANTINE ZONE ---------------- */}
         {activeMenu === "quarantine" && (
           <div className="card animate-in" style={{ minHeight: '80vh', padding: '40px', display: 'flex', flexDirection: 'column', border: '1px solid var(--danger)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
+            <div className="admin-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
               <div>
                 <h1 className="serif" style={{ fontSize: '2.2rem', marginBottom: '10px', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <ShieldAlert size={32} /> Quarantine Zone
@@ -646,7 +646,7 @@ export default function AdminDashboard({ navigate }) {
       {/* ---------------- 1. VIEW FEEDBACK MODAL (For Manager) ---------------- */}
       {selectedFeedback && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(10, 27, 63, 0.5)', backdropFilter: 'blur(6px)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <div className="card animate-in" style={{ width: '90%', maxWidth: '550px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', padding: '45px' }}>
+          <div className="card animate-in modal-content" style={{ width: '90%', maxWidth: '550px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', padding: '45px' }}>
             <button onClick={() => setSelectedFeedback(null)} style={{ position: 'absolute', top: '25px', right: '25px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#999' }}><X size={28} /></button>
             <h2 className="serif" style={{ fontSize: '2rem', color: 'var(--bg-dark-green)', marginBottom: '8px' }}>Feedback Report</h2>
             <p style={{ fontSize: '14px', color: '#888', marginBottom: '35px' }}>ID #{selectedFeedback.id} • Submitted via EdDSA Portal</p>
@@ -696,7 +696,7 @@ export default function AdminDashboard({ navigate }) {
       {/* ---------------- 2. CYBER TERMINAL MODAL (For Auditor) ---------------- */}
       {traceModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(5, 13, 33, 0.85)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <div className="animate-in" style={{ width: '90%', maxWidth: '700px', backgroundColor: '#0a0a0a', border: '1px solid #333', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', fontFamily: 'monospace' }}>
+          <div className="animate-in modal-content" style={{ width: '90%', maxWidth: '700px', backgroundColor: '#0a0a0a', border: '1px solid #333', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', fontFamily: 'monospace' }}>
 
             <div style={{ backgroundColor: '#1a1a1a', padding: '12px 20px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ color: '#888', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '10px' }}>

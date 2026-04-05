@@ -418,6 +418,51 @@ label { font-size: 12px; font-weight: 600; color: #555; text-transform: uppercas
   }
 }
 
+/* ---- SYSTEM WIDE MOBILE RESPONSIVENESS ---- */
+@media (max-width: 768px) {
+  /* Landing Page adjustments */
+  .landing-title { font-size: clamp(1.8rem, 8vw, 2.5rem); }
+  .landing-subtitle { font-size: 14px; margin-bottom: 24px; padding: 0 15px; }
+  .portal-card { padding: 20px; width: 100%; }
+  .portal-grid { gap: 15px; }
+  
+  /* Shared card padding */
+  .card, .feedback-card { padding: 20px !important; }
+
+  /* Forms & Verifications */
+  textarea { height: 120px !important; }
+  .feedback-hero { padding: 16px; margin-bottom: 20px; }
+  .feedback-hero-title { font-size: clamp(1.8rem, 6vw, 2.2rem); }
+  .step-indicator { gap: 10px !important; margin: 20px 0 !important; }
+  .step-circle { width: 30px !important; height: 30px !important; font-size: 13px !important; }
+  .step-line { width: 25px !important; }
+
+  /* Admin Dashboard Layout Overrides */
+  .admin-layout { flex-direction: column !important; }
+  .admin-sidebar { width: 100% !important; padding: 20px 15px !important; }
+  .admin-content { padding: 20px 15px !important; }
+
+  /* Admin Grid Structures */
+  .admin-grid-stats { grid-template-columns: 1fr 1fr !important; gap: 15px !important; }
+  .admin-grid-charts, .admin-grid-pie { grid-template-columns: 1fr !important; gap: 20px !important; }
+  
+  /* Flex header structures overrides */
+  .admin-header-row { flex-direction: column !important; gap: 15px; }
+  .admin-header-row > div:last-child { width: 100% !important; }
+  
+  /* Tables */
+  table { display: block; overflow-x: auto; white-space: nowrap; }
+  th, td { padding: 12px 10px !important; font-size: 13px !important; }
+
+  /* Modals */
+  .modal-content { width: 95% !important; padding: 25px !important; max-height: 85vh !important; }
+}
+
+@media (max-width: 480px) {
+  .admin-grid-stats { grid-template-columns: 1fr !important; }
+  .feedback-step1-grid { grid-template-columns: 1fr !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-in,
   .btn,
