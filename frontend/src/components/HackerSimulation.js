@@ -19,6 +19,7 @@ export default function HackerSimulation({ navigate }) {
     if (isAuthenticated) {
       fetchData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
   const fetchData = async () => {
