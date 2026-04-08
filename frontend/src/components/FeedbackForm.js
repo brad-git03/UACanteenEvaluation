@@ -15,6 +15,7 @@ export default function FeedbackForm({ navigate }) {
   const [status, setStatus] = useState("idle"); 
   const [signMessage, setSignMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [receiptData, setReceiptData] = useState(null);
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
   const handleRatingChange = (category, value) => setRatings(prev => ({ ...prev, [category]: value }));
@@ -52,7 +53,12 @@ export default function FeedbackForm({ navigate }) {
       setTimeout(() => setSignMessage("Encrypting payload & attachments..."), 1600); 
       
       await new Promise(resolve => setTimeout(resolve, 2400)); 
-      await submitFeedback(payload);
+      const response = await submitFeedback(payload);
+      
+      setReceiptData({
+        signature: response.signature,
+        public_key: response.public_key
+      });
       
       setStatus("success");
       setStep(3); 
@@ -89,6 +95,8 @@ Photo Evidence: ${imagePreview ? '1 Image Attached (Encrypted)' : 'None'}
 Status:      Verified & Secured
 Algorithm:   Ed25519 (EdDSA)
 Network:     UA Secure Node 01
+Signature:   ${receiptData?.signature || 'N/A'}
+Public Key:  ${receiptData?.public_key || 'N/A'}
 =========================================
 Keep this file for your records.`;
 

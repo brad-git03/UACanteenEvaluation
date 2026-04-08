@@ -5,18 +5,18 @@ export default function LandingPage({ navigate }) {
   return (
     <div className="landing-bg">
       <div className="landing-content">
-        <div className="landing-badge animate-in">
+        {/* <div className="landing-badge animate-in">
           • EdDSA • Ed25519 • Group 1 • Mid Lab 2
-        </div>
+        </div> */}
 
-        <img 
-          src="/ua-logo.png" 
-          alt="University of the Assumption Logo" 
+        <img
+          src="/ua-logo.png"
+          alt="University of the Assumption Logo"
           className="landing-logo animate-in"
         />
 
         <h1 className="serif landing-title animate-in">
-          University of the Assumption<br/>Canteen Evaluation
+          University of the Assumption<br />Canteen Evaluation
         </h1>
 
         <p className="landing-subtitle animate-in">
@@ -45,11 +45,11 @@ export default function LandingPage({ navigate }) {
         <button
           className="animate-in"
           onClick={() => navigate('verify_receipt')}
-          style={{ 
-            background: 'transparent', 
-            border: 'none', 
-            color: 'var(--accent-gold)', 
-            textDecoration: 'underline', 
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--accent-gold)',
+            textDecoration: 'underline',
             cursor: 'pointer',
             fontSize: '15px',
             marginTop: '10px',
