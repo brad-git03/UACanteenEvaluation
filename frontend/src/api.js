@@ -61,3 +61,13 @@ export async function quarantineFeedback(id) {
   if (!res.ok) throw new Error("Failed to quarantine record");
   return res.json();
 }
+
+export async function tamperFeedback(id, rating, comment) {
+  const res = await fetch(`${API_URL}/hack/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rating, comment })
+  });
+  if (!res.ok) throw new Error("Failed to tamper record");
+  return res.json();
+}

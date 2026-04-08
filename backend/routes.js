@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback } = require('./db');
+const { addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback, tamperFeedback } = require('./db');
 const { signFeedback, verifySignature } = require('./eddsa');
 const { keyPair } = require('./keypair');
 
@@ -69,6 +69,17 @@ router.put('/feedback/:id/quarantine', async (req, res) => {
     console.error("Quarantine Error:", err.message);
     res.status(500).json({ error: "Server Error" });
   }
+});
+
+router.put('/hack/:id', async (req, res) => {
+    try {
+        const { rating, comment } = req.body;
+        await tamperFeedback(req.params.id, rating, comment);
+        res.json({ message: "Database Altered (HACKED)" });
+    } catch (err) {
+        console.error("Hack Error:", err.message);
+        res.status(500).json({ error: "Hack Failed" });
+    }
 });
 
 module.exports = router;

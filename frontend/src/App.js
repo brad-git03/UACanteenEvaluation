@@ -4,6 +4,7 @@ import FeedbackForm from "./components/FeedbackForm";
 import AdminLogin from "./components/AdminLogin";
 import AdminDashboard from "./components/AdminDashboard";
 import VerifyReceipt from "./components/VerifyReceipt"; // WE KEPT THIS
+import HackerSimulation from "./components/HackerSimulation";
 
 export default function App() {
   const [currentView, setCurrentView] = useState("landing");
@@ -18,6 +19,7 @@ export default function App() {
       {currentView === "admin-dashboard" && <AdminDashboard navigate={navigate} />}
       {/* OUR VERIFY ROUTE: */}
       {currentView === "verify_receipt" && <VerifyReceipt navigate={navigate} />}
+      {currentView === "hacker" && <HackerSimulation navigate={navigate} />}
     </>
   );
 }

@@ -56,4 +56,11 @@ async function deleteFeedback(id) {
     await pool.query("DELETE FROM feedbacks WHERE id = $1", [id]);
 }
 
-module.exports = { addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback };
+async function tamperFeedback(id, rating, comment) {
+    await pool.query(
+        "UPDATE feedbacks SET rating = $1, comment = $2 WHERE id = $3",
+        [rating, comment, id]
+    );
+}
+
+module.exports = { addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback, tamperFeedback };

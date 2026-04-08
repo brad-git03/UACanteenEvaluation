@@ -59,6 +59,26 @@ export default function LandingPage({ navigate }) {
           Verify a PDF Receipt
         </button>
 
+        {/* SECRET HACKER BUTTON (VISIBLE TINY DOT) */}
+        <div style={{ position: 'absolute', bottom: '10px', right: '10px' }}>
+          <button
+            onClick={() => navigate('hacker')}
+            style={{
+              width: '8px',
+              height: '8px',
+              backgroundColor: 'rgba(255, 255, 255, 0.4)',
+              borderRadius: '50%',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              transition: 'background-color 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ff0000'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.4)'}
+            title="."
+          />
+        </div>
+
       </div>
     </div>
   );
