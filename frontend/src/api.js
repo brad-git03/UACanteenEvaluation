@@ -38,12 +38,12 @@ export async function verifyFeedback(feedback) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
+      id: feedback.id,
       customer_name: feedback.customer_name,
       rating: feedback.rating,
       comment: feedback.comment,
       signature: feedback.signature,
       public_key: feedback.public_key,
-      // 👉 THE CRITICAL FIX: Send the photo back to the server for mathematical verification!
       attachment: feedback.attachment 
     }),
   });

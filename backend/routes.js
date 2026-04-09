@@ -47,7 +47,12 @@ router.get('/feedbacks', async (req, res) => {
             } catch (e) {
                 valid = false;
             }
-            return { ...row, _is_signature_valid: valid };
+            
+            // SECURITY/PERFORMANCE FIX: Strip the massive attachment before returning to the frontend over the network.
+            const has_attachment = !!row.attachment;
+            delete row.attachment;
+            
+            return { ...row, _is_signature_valid: valid, has_attachment };
         });
 
         res.json(verifiedRows);
@@ -79,8 +84,17 @@ router.get('/feedback/:id/photo', async (req, res) => {
 });
 
 router.post('/verify', async (req, res) => {
-    // 👉 CRITICAL FIX: Verify the attachment during audits
-    const { customer_name, rating, comment, signature, public_key, attachment } = req.body;
+    // 👉 CRITICAL FIX: Verify the attachment during audits. If the dashboard didn't pre-load it, fetch it!
+    let { id, customer_name, rating, comment, signature, public_key, attachment } = req.body;
+    
+    // Lazy-load the attachment if missing
+    if (!attachment && id) {
+        try {
+            const photoRow = await getFeedbackPhoto(id);
+            if (photoRow) attachment = photoRow.attachment || null;
+        } catch (e) {}
+    }
+
     const feedbackForVerify = { customer_name, rating, comment, attachment };
     
     try {

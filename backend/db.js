@@ -44,8 +44,8 @@ async function addFeedback({ customer_name, rating, comment, signature, public_k
 }
 
 async function getAllFeedback() {
-    // SECURITY/PERFORMANCE FIX: Drop string processing of Base64 attachments
-    const result = await pool.query(`SELECT id, customer_name, rating, comment, signature, public_key, created_at, is_quarantined, (attachment IS NOT NULL) AS has_attachment FROM feedbacks ORDER BY created_at DESC`);
+    // We must fetch attachment so the backend can verify the signature hash!
+    const result = await pool.query(`SELECT * FROM feedbacks ORDER BY created_at DESC`);
     return result.rows;
 }
 
