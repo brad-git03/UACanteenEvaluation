@@ -25,6 +25,12 @@ export async function getLightFeedbacks() {
   return res.json();
 }
 
+export async function getFeedbackPhoto(id) {
+  const res = await fetch(`${API_URL}/feedback/${id}/photo`);
+  if (!res.ok) throw new Error("Failed to fetch photo");
+  return res.json();
+}
+
 export async function verifyFeedback(feedback) {
   const res = await fetch(`${API_URL}/verify`, {
     method: "POST",

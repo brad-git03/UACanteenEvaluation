@@ -44,8 +44,14 @@ async function addFeedback({ customer_name, rating, comment, signature, public_k
 }
 
 async function getAllFeedback() {
-    const result = await pool.query(`SELECT * FROM feedbacks ORDER BY created_at DESC`);
+    // SECURITY/PERFORMANCE FIX: Drop string processing of Base64 attachments
+    const result = await pool.query(`SELECT id, customer_name, rating, comment, signature, public_key, created_at, is_quarantined, (attachment IS NOT NULL) AS has_attachment FROM feedbacks ORDER BY created_at DESC`);
     return result.rows;
+}
+
+async function getFeedbackPhoto(id) {
+    const result = await pool.query(`SELECT attachment FROM feedbacks WHERE id = $1`, [id]);
+    return result.rows[0];
 }
 
 async function quarantineFeedback(id) {
@@ -68,4 +74,4 @@ async function getLightFeedbacks() {
     return result.rows;
 }
 
-module.exports = { addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback, tamperFeedback, getLightFeedbacks };
+module.exports = { addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback, tamperFeedback, getLightFeedbacks, getFeedbackPhoto };

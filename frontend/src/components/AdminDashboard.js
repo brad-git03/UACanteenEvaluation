@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { getAllFeedbacks, verifyFeedback, deleteFeedback, quarantineFeedback } from "../api";
+import { getAllFeedbacks, verifyFeedback, deleteFeedback, quarantineFeedback, getFeedbackPhoto } from "../api";
 import {
   PieChart, Pie, Cell, Tooltip as PieTooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as BarTooltip
@@ -119,6 +119,20 @@ export default function AdminDashboard({ navigate }) {
   const topCategory = count > 0 ? [...barData].sort((a, b) => b.score - a.score)[0] : { name: "N/A", score: 0 };
 
   // --- ACTIONS ---
+  const openModal = async (f) => {
+    setSelectedFeedback(f);
+    if (f.has_attachment && !f.attachment) {
+      try {
+        const photoData = await getFeedbackPhoto(f.id);
+        if (photoData && photoData.attachment) {
+          setSelectedFeedback(prev => (prev && prev.id === f.id ? { ...prev, attachment: photoData.attachment } : prev));
+        }
+      } catch (err) {
+        console.error("Failed to load photo", err);
+      }
+    }
+  };
+
   const handleVerify = async (feedback) => {
     setVerifyState(prev => ({ ...prev, [feedback.id]: { status: "checking" } }));
     const now = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -455,12 +469,12 @@ export default function AdminDashboard({ navigate }) {
                       {/* UPDATED: Displays the [PHOTO] badge if an attachment is present */}
                       <td style={{ padding: '24px 12px', fontSize: '15px', color: '#444' }}>
                         {parsed.metrics ? <span style={{ color: 'var(--accent-gold)', fontWeight: 600 }}>[Multi-Category Entry]</span> : `"${parsed.text.substring(0, 45)}..."`}
-                        {f.attachment && <span style={{fontSize: '11px', color: 'var(--bg-dark-green)', fontWeight: 'bold', marginLeft: '8px'}}>[PHOTO]</span>}
+                        {f.has_attachment && <span style={{fontSize: '11px', color: 'var(--bg-dark-green)', fontWeight: 'bold', marginLeft: '8px'}}>[PHOTO]</span>}
                       </td>
 
                       <td style={{ padding: '24px 12px', fontWeight: 600, color: 'var(--accent-gold)', fontSize: '15px' }}>{f.rating} / 5</td>
                       <td style={{ padding: '24px 12px', textAlign: 'right' }}>
-                        <button className="btn-secondary" onClick={() => setSelectedFeedback(f)} style={{ fontSize: '14px', padding: '8px 16px' }}>View Full</button>
+                        <button className="btn-secondary" onClick={() => openModal(f)} style={{ fontSize: '14px', padding: '8px 16px' }}>View Full</button>
                       </td>
                     </tr>
                   );
@@ -619,7 +633,7 @@ export default function AdminDashboard({ navigate }) {
                       {/* UPDATED: Displays the [PHOTO] badge if an attachment is present */}
                       <td style={{ padding: '24px 12px', fontSize: '15px', color: '#444' }}>
                         {parsed.metrics ? <span style={{ color: 'var(--accent-gold)', fontWeight: 600 }}>[Multi-Category Entry]</span> : `"${parsed.text.substring(0, 45)}..."`}
-                        {f.attachment && <span style={{fontSize: '11px', color: 'var(--danger)', fontWeight: 'bold', marginLeft: '8px'}}>[PHOTO]</span>}
+                        {f.has_attachment && <span style={{fontSize: '11px', color: 'var(--danger)', fontWeight: 'bold', marginLeft: '8px'}}>[PHOTO]</span>}
                       </td>
 
                       <td style={{ padding: '24px 12px', fontWeight: 600, color: 'var(--danger)', fontSize: '15px' }}>{f.rating} / 5</td>
@@ -677,6 +691,11 @@ export default function AdminDashboard({ navigate }) {
             </div>
             
             {/* NEW ATTACHMENT SECTION */}
+            {selectedFeedback.has_attachment && !selectedFeedback.attachment && (
+              <div style={{ color: '#888', fontStyle: 'italic', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Clock size={14} /> Loading high-res evidence data from server...
+              </div>
+            )}
             {selectedFeedback.attachment && (
               <div>
                 <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>

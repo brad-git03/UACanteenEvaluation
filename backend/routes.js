@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback, tamperFeedback, getLightFeedbacks } = require('./db');
+const { addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback, tamperFeedback, getLightFeedbacks, getFeedbackPhoto } = require('./db');
 const { signFeedback, verifySignature } = require('./eddsa');
 const { keyPair } = require('./keypair');
 
@@ -62,6 +62,19 @@ router.get('/feedbacks/light', async (req, res) => {
         res.json(rows);
     } catch (e) {
         res.status(500).json({ error: "Couldn't fetch light feedback." });
+    }
+});
+
+router.get('/feedback/:id/photo', async (req, res) => {
+    try {
+        const row = await getFeedbackPhoto(req.params.id);
+        if (row && row.attachment) {
+            res.json({ attachment: row.attachment });
+        } else {
+            res.status(404).json({ error: "No photo found" });
+        }
+    } catch (e) {
+        res.status(500).json({ error: "Couldn't fetch photo." });
     }
 });
 

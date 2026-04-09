@@ -28,7 +28,25 @@ export default function FeedbackForm({ navigate }) {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => setImagePreview(reader.result);
+      reader.onloadend = () => {
+        const img = new Image();
+        img.src = reader.result;
+        img.onload = () => {
+          const MAX_WIDTH = 800;
+          let scaleSize = 1;
+          if (img.width > MAX_WIDTH) {
+            scaleSize = MAX_WIDTH / img.width;
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width * scaleSize;
+          canvas.height = img.height * scaleSize;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          // Compress to JPEG and reduce data size substantially
+          const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+          setImagePreview(compressedBase64);
+        };
+      };
       reader.readAsDataURL(file);
     }
   };
