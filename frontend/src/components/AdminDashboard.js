@@ -11,6 +11,7 @@ export default function AdminDashboard({ navigate }) {
   const [verifyState, setVerifyState] = useState({});
   const [activeMenu, setActiveMenu] = useState("dashboard");
   const [selectedFeedback, setSelectedFeedback] = useState(null);
+  const [fullScreenImage, setFullScreenImage] = useState(null);
   const [isAuditing, setIsAuditing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [traceModal, setTraceModal] = useState(null);
@@ -701,12 +702,29 @@ export default function AdminDashboard({ navigate }) {
                 <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
                   <Camera size={14} /> EVIDENCE ATTACHMENT
                 </span>
-                <div style={{ padding: '10px', backgroundColor: '#f9f9f9', borderRadius: '12px', border: '1px solid #eee', display: 'flex', justifyContent: 'center' }}>
+                <div 
+                  onClick={() => setFullScreenImage(selectedFeedback.attachment)}
+                  title="Click to view full size"
+                  style={{ padding: '10px', backgroundColor: '#f9f9f9', borderRadius: '12px', border: '1px solid #eee', display: 'flex', justifyContent: 'center', cursor: 'zoom-in', transition: '0.2s' }}
+                  onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-gold)'}
+                  onMouseLeave={(e) => e.currentTarget.style.borderColor = '#eee'}
+                >
                   <img src={selectedFeedback.attachment} alt="Evidence" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px', objectFit: 'contain' }} />
                 </div>
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ---------------- 1.B FULL SCREEN IMAGE VIEWER ---------------- */}
+      {fullScreenImage && (
+        <div 
+          onClick={() => setFullScreenImage(null)}
+          style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'zoom-out' }}
+        >
+          <button style={{ position: 'absolute', top: '25px', right: '35px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'white' }}><X size={36} /></button>
+          <img src={fullScreenImage} alt="Full Screen Evidence" style={{ maxWidth: '90%', maxHeight: '90vh', objectFit: 'contain', outline: '4px solid white', borderRadius: '4px' }} />
         </div>
       )}
 
