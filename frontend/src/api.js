@@ -19,6 +19,12 @@ export async function getAllFeedbacks() {
   return res.json();
 }
 
+export async function getLightFeedbacks() {
+  const res = await fetch(`${API_URL}/feedbacks/light`);
+  if (!res.ok) throw new Error("Failed to fetch light data");
+  return res.json();
+}
+
 export async function verifyFeedback(feedback) {
   const res = await fetch(`${API_URL}/verify`, {
     method: "POST",

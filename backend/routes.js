@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback, tamperFeedback } = require('./db');
+const { addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback, tamperFeedback, getLightFeedbacks } = require('./db');
 const { signFeedback, verifySignature } = require('./eddsa');
 const { keyPair } = require('./keypair');
 
@@ -53,6 +53,15 @@ router.get('/feedbacks', async (req, res) => {
         res.json(verifiedRows);
     } catch (e) {
         res.status(500).json({ error: "Couldn't fetch feedback." });
+    }
+});
+
+router.get('/feedbacks/light', async (req, res) => {
+    try {
+        const rows = await getLightFeedbacks();
+        res.json(rows);
+    } catch (e) {
+        res.status(500).json({ error: "Couldn't fetch light feedback." });
     }
 });
 

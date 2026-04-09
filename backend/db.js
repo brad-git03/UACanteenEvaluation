@@ -63,4 +63,9 @@ async function tamperFeedback(id, rating, comment) {
     );
 }
 
-module.exports = { addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback, tamperFeedback };
+async function getLightFeedbacks() {
+    const result = await pool.query(`SELECT id, customer_name, rating, comment, is_quarantined FROM feedbacks ORDER BY created_at DESC`);
+    return result.rows;
+}
+
+module.exports = { addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback, tamperFeedback, getLightFeedbacks };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getAllFeedbacks, tamperFeedback } from '../api';
+import { getLightFeedbacks, tamperFeedback } from '../api';
 import { Terminal, ShieldAlert, Cpu, Database, AlertTriangle } from 'lucide-react';
 
 export default function HackerSimulation({ navigate }) {
@@ -24,7 +24,7 @@ export default function HackerSimulation({ navigate }) {
 
   const fetchData = async () => {
     try {
-      const data = await getAllFeedbacks();
+      const data = await getLightFeedbacks();
       setFeedbacks(data);
     } catch (e) {
       addLog(`ERROR: Connection refused.`);
