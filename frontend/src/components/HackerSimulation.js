@@ -51,11 +51,6 @@ export default function HackerSimulation({ navigate }) {
     addLog(`INJECTING SQL PAYLOAD AT ID [${selectedId}]...`);
     
     try {
-      // Simulate delay for dramatic effect
-      setTimeout(() => addLog("BYPASSING SERVER LOGIC..."), 800);
-      setTimeout(() => addLog("ALTERING RECORD IN DATABASE..."), 1500);
-      
-      await new Promise(resolve => setTimeout(resolve, 2500));
       await tamperFeedback(selectedId, Number(editRating), editComment);
       
       addLog("SUCCESS: DATABASE FRACTURED AND RECORD ALTERED.");

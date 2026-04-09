@@ -28,13 +28,11 @@ export default function AdminDashboard({ navigate }) {
       try {
         const data = await getAllFeedbacks();
         setFeedbacks(data);
-        const results = await Promise.all(data.map(async (f) => {
-          try {
-            const { valid } = await verifyFeedback(f);
-            return { id: f.id, status: valid ? "valid" : "invalid" };
-          } catch {
-            return { id: f.id, status: "invalid" };
-          }
+        
+        // No more N+1 HTTP calls! We use the bulk verified flags from the backend directly.
+        const results = data.map(f => ({
+          id: f.id,
+          status: f._is_signature_valid ? "valid" : "invalid"
         }));
 
         const now = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });

@@ -31,7 +31,26 @@ router.post('/feedback', async (req, res) => {
 router.get('/feedbacks', async (req, res) => {
     try {
         const rows = await getAllFeedback();
-        res.json(rows);
+        
+        // BULK VERIFICATION: Prevent frontend traffic jam
+        const verifiedRows = rows.map(row => {
+            const feedbackForVerify = {
+                customer_name: row.customer_name,
+                rating: row.rating,
+                comment: row.comment,
+                attachment: row.attachment
+            };
+            let valid = false;
+            try {
+                const pubKeyBin = Buffer.from(row.public_key, 'base64');
+                valid = verifySignature(pubKeyBin, feedbackForVerify, row.signature);
+            } catch (e) {
+                valid = false;
+            }
+            return { ...row, _is_signature_valid: valid };
+        });
+
+        res.json(verifiedRows);
     } catch (e) {
         res.status(500).json({ error: "Couldn't fetch feedback." });
     }
