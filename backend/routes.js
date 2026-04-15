@@ -1,26 +1,57 @@
 const express = require('express');
 const router = express.Router();
-const { addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback, tamperFeedback, getLightFeedbacks, getFeedbackPhoto } = require('./db');
-const { signFeedback, verifySignature } = require('./eddsa');
-const { keyPair } = require('./keypair');
+const { 
+  addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback, 
+  tamperFeedback, getLightFeedbacks, getFeedbackPhoto,
+  getAllStalls, addStall, deleteStall 
+} = require('./db');
+const { verifySignature } = require('./eddsa'); 
 
-router.post('/feedback', async (req, res) => {
-    // 👉 CRITICAL FIX: Extract the attachment from the incoming request
-    let { customer_name, rating, comment, attachment } = req.body;
+// 👇 1. Import our new Authentication logic
+const { registerUser, loginUser, requireAuth } = require('./auth');
+
+// --- IDENTITY & AUTH ROUTES ---
+router.post('/register', registerUser);
+router.post('/login', loginUser);
+
+// --- SECURE FEEDBACK ROUTE ---
+// 👇 2. Notice requireAuth is inserted right here as a "bouncer"!
+router.post('/feedback', requireAuth, async (req, res) => {
     
-    customer_name = customer_name ? String(customer_name).trim() : null; 
+    // We no longer extract customer_name from req.body!
+    let { rating, comment, attachment, signature, public_key } = req.body;
+    
+    // 🔒 AUTHENTICITY ENFORCEMENT: 
+    // We strictly use the identity verified by the JWT token.
+    const customer_name = req.user.full_name; 
+    const user_id = req.user.id; 
+
     rating = Number(rating); 
     comment = comment ? String(comment).trim() : "";
 
     if (rating < 1 || rating > 5) return res.status(400).json({ error: 'Rating must be 1-5' });
     if (!comment) return res.status(400).json({ error: 'Comment required' });
+    if (!signature || !public_key) return res.status(400).json({ error: 'Cryptographic signature and public key are required.' });
 
-    const feedbackForSign = { customer_name, rating, comment, attachment };
-    const signature = signFeedback(keyPair.secretKey, feedbackForSign);
-    const public_key = Buffer.from(keyPair.publicKey).toString('base64');
-
+    // 1. Reconstruct the payload exactly as the frontend signed it.
+    // (We will update the frontend next so it signs using their true verified name)
+    const feedbackForVerify = { customer_name, rating, comment, attachment };
+    
+    // 2. VERIFY the frontend's signature BEFORE saving to the database
     try {
-        const inserted = await addFeedback({ customer_name, rating, comment, signature, public_key, attachment });
+        const pubKeyBin = Buffer.from(public_key, 'base64');
+        const isValid = verifySignature(pubKeyBin, feedbackForVerify, signature);
+        
+        if (!isValid) {
+            return res.status(401).json({ error: 'Data integrity check failed: Invalid signature.' });
+        }
+    } catch (e) {
+        return res.status(401).json({ error: 'Malformed cryptographic keys provided.' });
+    }
+
+    // 3. If verification passes, insert it into PostgreSQL linking their user_id!
+    try {
+        const inserted = await addFeedback({ user_id, customer_name, rating, comment, signature, public_key, attachment });
         res.status(201).json(inserted);
     } catch (e) {
         console.error("Insert Error:", e.message);
@@ -28,11 +59,12 @@ router.post('/feedback', async (req, res) => {
     }
 });
 
+// ... (The rest of your routes remain exactly the same) ...
+
 router.get('/feedbacks', async (req, res) => {
     try {
         const rows = await getAllFeedback();
         
-        // BULK VERIFICATION: Prevent frontend traffic jam
         const verifiedRows = rows.map(row => {
             const feedbackForVerify = {
                 customer_name: row.customer_name,
@@ -48,7 +80,6 @@ router.get('/feedbacks', async (req, res) => {
                 valid = false;
             }
             
-            // SECURITY/PERFORMANCE FIX: Strip the massive attachment before returning to the frontend over the network.
             const has_attachment = !!row.attachment;
             delete row.attachment;
             
@@ -84,10 +115,8 @@ router.get('/feedback/:id/photo', async (req, res) => {
 });
 
 router.post('/verify', async (req, res) => {
-    // 👉 CRITICAL FIX: Verify the attachment during audits. If the dashboard didn't pre-load it, fetch it!
     let { id, customer_name, rating, comment, signature, public_key, attachment } = req.body;
     
-    // Lazy-load the attachment if missing
     if (!attachment && id) {
         try {
             const photoRow = await getFeedbackPhoto(id);
@@ -137,4 +166,44 @@ router.put('/hack/:id', async (req, res) => {
     }
 });
 
+
+// --- STALL MANAGEMENT ROUTES (PostgreSQL) ---
+
+// GET all stalls
+router.get('/stalls', async (req, res) => {
+    try {
+        const rows = await getAllStalls();
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST a new stall
+router.post('/stalls', async (req, res) => {
+    try {
+        const { name } = req.body;
+        if (!name) return res.status(400).json({ error: "Stall name is required" });
+        
+        const newStall = await addStall(name);
+        res.json(newStall);
+    } catch (err) {
+        if (err.message.toLowerCase().includes("unique")) {
+            return res.status(400).json({ error: "Stall already exists" });
+        }
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE a stall
+router.delete('/stalls/:id', async (req, res) => {
+    try {
+        await deleteStall(req.params.id);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
+

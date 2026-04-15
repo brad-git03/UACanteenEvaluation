@@ -21,15 +21,9 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-const hexSeed = process.env.EDDSA_SEED;
-if (!hexSeed || hexSeed.length !== 64) {
-    throw new Error('EDDSA_SEED must be set and be 32 bytes/64 hex chars.');
-}
-
-const { keyPair } = require('./keypair');
-module.exports.keyPair = keyPair;
 
 app.use('/api', routes);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`Backend running on http://localhost:${PORT}`));
+

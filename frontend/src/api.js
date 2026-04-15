@@ -1,85 +1,135 @@
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:4000/api";
+const API_URL = 'http://localhost:4000/api'; // Ensure this matches your backend port
 
-export async function submitFeedback(feedback) {
-  const res = await fetch(`${API_URL}/feedback`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(feedback)
-  });
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({})); 
-    throw new Error(errData.error || "Failed to submit feedback");
-  }
-  return res.json();
-}
+// --- IDENTITY & AUTHENTICATION ---
 
-export async function getAllFeedbacks() {
-  const res = await fetch(`${API_URL}/feedbacks`);
-  if (!res.ok) throw new Error("Failed to fetch data");
-  return res.json();
-}
+export const loginUser = async (credentials) => {
+    const response = await fetch(`${API_URL}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials)
+    });
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Login failed');
+    }
+    return response.json();
+};
 
-export async function getLightFeedbacks() {
-  const res = await fetch(`${API_URL}/feedbacks/light`);
-  if (!res.ok) throw new Error("Failed to fetch light data");
-  return res.json();
-}
+export const registerUser = async (userData) => {
+    const response = await fetch(`${API_URL}/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData)
+    });
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Registration failed');
+    }
+    return response.json();
+};
 
-export async function getFeedbackPhoto(id) {
-  const res = await fetch(`${API_URL}/feedback/${id}/photo`);
-  if (!res.ok) throw new Error("Failed to fetch photo");
-  return res.json();
-}
+// --- SECURE FEEDBACK ---
 
-export async function verifyFeedback(feedback) {
-  const res = await fetch(`${API_URL}/verify`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      id: feedback.id,
-      customer_name: feedback.customer_name,
-      rating: feedback.rating,
-      comment: feedback.comment,
-      signature: feedback.signature,
-      public_key: feedback.public_key,
-      attachment: feedback.attachment 
-    }),
-  });
-  
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.error || "Verification request failed");
-  }
-  
-  return res.json();
-}
+export const submitFeedback = async (payload) => {
+    const token = localStorage.getItem('ua_token');
 
-// OUR MERGED PURGE FUNCTION
-export async function deleteFeedback(id) {
-  const res = await fetch(`${API_URL}/feedback/${id}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) throw new Error("Failed to delete record");
-  return res.json();
-}
+    const response = await fetch(`${API_URL}/feedback`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : '' 
+        },
+        body: JSON.stringify(payload)
+    });
 
-// 👉 ADD THIS TO src/api.js:
-export async function quarantineFeedback(id) {
-  const res = await fetch(`${API_URL}/feedback/${id}/quarantine`, {
-    method: "PUT",
-  });
-  if (!res.ok) throw new Error("Failed to quarantine record");
-  return res.json();
-}
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit feedback');
+    }
+    return response.json();
+};
 
-export async function tamperFeedback(id, rating, comment) {
-  const res = await fetch(`${API_URL}/hack/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rating, comment })
-  });
-  if (!res.ok) throw new Error("Failed to tamper record");
-  return res.json();
-}
+// --- STALL MANAGEMENT ---
+
+export const fetchStalls = async () => {
+    const response = await fetch(`${API_URL}/stalls`);
+    if (!response.ok) {
+        throw new Error('Failed to fetch stalls');
+    }
+    return response.json();
+};
+
+export const addStall = async (name) => {
+    const response = await fetch(`${API_URL}/stalls`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+    });
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to add stall');
+    }
+    return response.json();
+};
+
+export const deleteStall = async (id) => {
+    const response = await fetch(`${API_URL}/stalls/${id}`, { method: 'DELETE' });
+    if (!response.ok) {
+        throw new Error('Failed to delete stall');
+    }
+    return response.json();
+};
+
+// --- ADMIN ROUTES ---
+
+export const getAllFeedbacks = async () => {
+    const response = await fetch(`${API_URL}/feedbacks`);
+    return response.json();
+};
+
+export const getFeedbackPhoto = async (id) => {
+    const response = await fetch(`${API_URL}/feedback/${id}/photo`);
+    if (!response.ok) return null;
+    return response.json();
+};
+
+export const verifyFeedback = async (data) => {
+    const response = await fetch(`${API_URL}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+    return response.json();
+};
+
+export const deleteFeedback = async (id) => {
+    const response = await fetch(`${API_URL}/feedback/${id}`, { method: 'DELETE' });
+    return response.json();
+};
+
+export const quarantineFeedback = async (id) => {
+    const response = await fetch(`${API_URL}/feedback/${id}/quarantine`, { method: 'PUT' });
+    return response.json();
+};
+
+// --- HACKER SIMULATION ROUTES ---
+
+export const getLightFeedbacks = async () => {
+    const response = await fetch(`${API_URL}/feedbacks/light`);
+    if (!response.ok) {
+        throw new Error('Failed to fetch light feedbacks');
+    }
+    return response.json();
+};
+
+export const tamperFeedback = async (id, rating, comment) => {
+    const response = await fetch(`${API_URL}/hack/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating, comment })
+    });
+    if (!response.ok) {
+        throw new Error('Failed to hack feedback');
+    }
+    return response.json();
+};

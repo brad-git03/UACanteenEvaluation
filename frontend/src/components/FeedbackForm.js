@@ -1,14 +1,26 @@
-import React, { useState, useRef } from "react";
-import { submitFeedback } from "../api";
-import { Star, CheckCircle2, Loader2, Lock, ShieldCheck, UploadCloud, Image as ImageIcon, X, Download } from 'lucide-react';
+import React, { useState, useRef, useEffect } from "react";
+import { submitFeedback, fetchStalls } from "../api"; // 👈 Added fetchStalls
+import { Star, CheckCircle2, Loader2, Lock, ShieldCheck, UploadCloud, Image as ImageIcon, X, Copy, LogOut, UserCheck, Store } from 'lucide-react';
+
+// Client-Side Cryptography
+import naclUtil from 'tweetnacl-util';
+import { generateKeyPair, signData } from '../utils/crypto';
+
+// Background image
+import bgMain from '../Background_img/wmremove-transformed.png';
 
 export default function FeedbackForm({ navigate }) {
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ customer_name: "", comment: "" });
+  const [form, setForm] = useState({ comment: "" }); 
+  
+  // 👈 NEW: Dynamic Stall State
+  const [selectedStall, setSelectedStall] = useState("");
+  const [availableStalls, setAvailableStalls] = useState([]);
+  const [loadingStalls, setLoadingStalls] = useState(true);
+
   const [ratings, setRatings] = useState({ Food: 5, Service: 5, Staff: 5, Cleanliness: 5, Value: 5 });
   const [hoverRating, setHoverRating] = useState({ category: '', val: 0 });
   
-  // Image Upload State
   const [imagePreview, setImagePreview] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -16,6 +28,57 @@ export default function FeedbackForm({ navigate }) {
   const [signMessage, setSignMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [receiptData, setReceiptData] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('ua_user');
+    const storedToken = localStorage.getItem('ua_token');
+    
+    if (storedUser && storedToken) {
+      setUser(JSON.parse(storedUser));
+    } else {
+      navigate('login');
+      return;
+    }
+
+    // 👈 NEW: Fetch stalls from database on load
+    const loadStalls = async () => {
+      try {
+        const data = await fetchStalls();
+        // Handle if backend returns objects [{name: "Stall 1"}] or strings ["Stall 1"]
+        if (data && data.length > 0) {
+          const formattedStalls = data.map(s => typeof s === 'string' ? s : s.name);
+          setAvailableStalls(formattedStalls);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch stalls from DB, using fallbacks.", err);
+        // Fallback so the app doesn't break while you build the backend
+        setAvailableStalls([
+          "Main Hot Meals", "Snacks & Sandwiches", "Drinks & Desserts", "Noodles & Dimsum", "Fast Food Corner"
+        ]);
+      } finally {
+        setLoadingStalls(false);
+      }
+    };
+
+    loadStalls();
+  }, [navigate]);
+
+  const colors = {
+    navy: '#0C2340', 
+    gold: '#E5A823', 
+    bg: '#F1F5F9',
+    white: '#FFFFFF',
+    text: '#1E293B',
+    textMuted: '#64748B',
+    border: '#E2E8F0',
+    success: '#10B981',
+    red: '#C8102E'
+  };
+
+  const modernFont = "'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
   const handleRatingChange = (category, value) => setRatings(prev => ({ ...prev, [category]: value }));
@@ -23,7 +86,12 @@ export default function FeedbackForm({ navigate }) {
   const totalScore = Object.values(ratings).reduce((sum, val) => sum + val, 0);
   const overallRating = Math.round(totalScore / 5);
 
-  // Handle Image Selection & Live Preview
+  const handleLogout = () => {
+    localStorage.removeItem('ua_token');
+    localStorage.removeItem('ua_user');
+    navigate('landing');
+  };
+
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -34,15 +102,12 @@ export default function FeedbackForm({ navigate }) {
         img.onload = () => {
           const MAX_WIDTH = 800;
           let scaleSize = 1;
-          if (img.width > MAX_WIDTH) {
-            scaleSize = MAX_WIDTH / img.width;
-          }
+          if (img.width > MAX_WIDTH) scaleSize = MAX_WIDTH / img.width;
           const canvas = document.createElement("canvas");
           canvas.width = img.width * scaleSize;
           canvas.height = img.height * scaleSize;
           const ctx = canvas.getContext("2d");
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          // Compress to JPEG and reduce data size substantially
           const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
           setImagePreview(compressedBase64);
         };
@@ -56,26 +121,44 @@ export default function FeedbackForm({ navigate }) {
     setStatus("signing");
     setSignMessage("Initializing Ed25519 Curve...");
     
-    const categoryBreakdown = `[Scores -> Food: ${ratings.Food}/5 | Service: ${ratings.Service}/5 | Staff: ${ratings.Staff}/5 | Clean: ${ratings.Cleanliness}/5 | Value: ${ratings.Value}/5]`;
-    const finalComment = `${categoryBreakdown}\n\n${form.comment}`;
+    // Securely bake the selected stall into the payload text
+    const payloadText = `[Stall: ${selectedStall}] [Scores -> Food: ${ratings.Food}/5 | Service: ${ratings.Service}/5 | Staff: ${ratings.Staff}/5 | Clean: ${ratings.Cleanliness}/5 | Value: ${ratings.Value}/5]\n\n${form.comment}`;
 
     const payload = {
-      customer_name: form.customer_name,
+      customer_name: user.full_name, 
       rating: overallRating,
-      comment: finalComment,
+      comment: payloadText,
       attachment: imagePreview 
     };
 
     try {
-      setTimeout(() => setSignMessage("Generating digital signature..."), 800);
-      setTimeout(() => setSignMessage("Encrypting payload & attachments..."), 1600); 
-      
-      await new Promise(resolve => setTimeout(resolve, 2400)); 
-      const response = await submitFeedback(payload);
+      setSignMessage("Generating random Ed25519 keypair on device...");
+      await new Promise(resolve => setTimeout(resolve, 400)); 
+
+      const { publicKey, secretKey } = generateKeyPair();
+      const publicKeyBase64 = naclUtil.encodeBase64(publicKey);
+
+      setSignMessage(`Signing payload as ${user.full_name}...`);
+      await new Promise(resolve => setTimeout(resolve, 400)); 
+
+      const clientSignature = signData(secretKey, payload);
+
+      setSignMessage("Transmitting signature & public key to server...");
+      await new Promise(resolve => setTimeout(resolve, 400)); 
+
+      const fullPayload = {
+        rating: overallRating,
+        comment: payloadText,
+        attachment: imagePreview,
+        signature: clientSignature,
+        public_key: publicKeyBase64
+      };
+
+      await submitFeedback(fullPayload);
       
       setReceiptData({
-        signature: response.signature,
-        public_key: response.public_key
+        signature: clientSignature,
+        public_key: publicKeyBase64
       });
       
       setStatus("success");
@@ -86,287 +169,379 @@ export default function FeedbackForm({ navigate }) {
     }
   };
 
-  // Generate and Download the Cryptographic Receipt
-  const downloadReceipt = () => {
-    const date = new Date().toLocaleString();
-    const receiptContent = `=========================================
-UA CANTEEN: SECURE FEEDBACK RECEIPT
-=========================================
-Date Submitted: ${date}
-Customer Name:  ${form.customer_name || 'Anonymous'}
-Overall Rating: ${overallRating} / 5 Stars
-
-[Category Breakdown]
-Food:        ${ratings.Food}/5
-Service:     ${ratings.Service}/5
-Staff:       ${ratings.Staff}/5
-Cleanliness: ${ratings.Cleanliness}/5
-Value:       ${ratings.Value}/5
-
-[Comments]
-${form.comment || 'No written comments provided.'}
-
-[Attachments]
-Photo Evidence: ${imagePreview ? '1 Image Attached (Encrypted)' : 'None'}
-
---- CRYPTOGRAPHIC SIGNATURE ---
-Status:      Verified & Secured
-Algorithm:   Ed25519 (EdDSA)
-Network:     UA Secure Node 01
-Signature:   ${receiptData?.signature || 'N/A'}
-Public Key:  ${receiptData?.public_key || 'N/A'}
-=========================================
-Keep this file for your records.`;
-
-    const blob = new Blob([receiptContent], { type: 'text/plain' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `UA_Feedback_Receipt_${Date.now()}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+  const copyToClipboard = () => {
+    if (receiptData?.signature) {
+      navigator.clipboard.writeText(receiptData.signature);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500); 
+    }
   };
 
-  return (
-    <div className="feedback-page portal-style-bg portal-style-bg-feedback" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '50px 20px' }}>
+  if (!user) return null; 
 
-      <div className="feedback-hero animate-in">
-        <div className="feedback-hero-badge">
-          <Lock size={14} color="var(--accent-gold)" /> EdDSA Secured Portal
+  return (
+    <div style={{ minHeight: '100vh', backgroundColor: colors.bg, fontFamily: modernFont, position: 'relative' }}>
+      
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap');
+        
+        .top-nav { display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 900px; margin-bottom: 40px; }
+        .hero-title { font-size: 38px; }
+        .hero-desc { font-size: 16px; }
+        .card-inner { padding: 40px; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 40px; }
+        .action-buttons { display: flex; gap: 16px; justify-content: space-between; }
+        .stall-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+        
+        .desktop-only { display: inline; }
+        .mobile-only { display: none; }
+
+        @media (max-width: 768px) {
+          .card-inner { padding: 24px; }
+          .form-grid { grid-template-columns: 1fr; gap: 24px; }
+          .action-buttons { flex-direction: column-reverse; }
+          .action-buttons button { width: 100% !important; max-width: 100% !important; }
+        }
+
+        @media (max-width: 480px) {
+          .top-nav { margin-bottom: 24px; }
+          .desktop-only { display: none !important; }
+          .mobile-only { display: inline !important; }
+          .hero-title { font-size: 30px; margin-top: 10px; }
+          .hero-desc { font-size: 14px; }
+          .card-inner { padding: 20px 16px; }
+          .stall-grid { grid-template-columns: 1fr 1fr; }
+        }
+      `}</style>
+
+      <div style={{ 
+        position: 'absolute', top: 0, left: 0, right: 0, height: '340px', 
+        backgroundImage: `url("${bgMain}")`, backgroundSize: 'cover', backgroundPosition: 'center',
+        borderBottom: `4px solid ${colors.gold}`, zIndex: 0 
+      }}>
+        <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(12, 35, 64, 0.85)' }}></div>
+      </div>
+
+      <div style={{ position: 'relative', zIndex: 1, padding: '24px 20px 40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        
+        <div className="top-nav">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: 'rgba(16, 185, 129, 0.15)', padding: '8px 14px', borderRadius: '10px', border: `1px solid rgba(16, 185, 129, 0.3)` }}>
+            <UserCheck size={18} color={colors.success} /> 
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+              <span className="desktop-only" style={{ color: '#A7F3D0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Authenticated as</span>
+              <span className="mobile-only" style={{ color: '#A7F3D0', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Logged In</span>
+              <span style={{ color: colors.gold, fontSize: '14px', fontWeight: 700 }}>
+                {user.full_name} <span className="desktop-only">({user.ua_id})</span>
+              </span>
+            </div>
+          </div>
+
+          <button onClick={handleLogout} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: colors.white, padding: '10px 14px', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit' }} onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.8)'} onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}>
+            <LogOut size={16} /> 
+            <span className="desktop-only" style={{ fontSize: '13px', fontWeight: 600 }}>Secure Logout</span>
+          </button>
         </div>
 
-        <h1 className="serif feedback-hero-title">
-          Rate Your <span style={{ color: 'var(--accent-gold)' }}>Experience</span>
-        </h1>
-        <p className="feedback-hero-subtitle">
-          Your feedback is cryptographically signed and saved securely.
-        </p>
+        <div style={{ textAlign: 'center', color: colors.white, marginBottom: '32px' }}>
+          <h1 className="hero-title" style={{ fontWeight: 700, margin: '0 0 12px 0', letterSpacing: '-0.02em', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
+            Rate Your <span style={{ color: colors.gold }}>Experience</span>
+          </h1>
+          <p className="hero-desc" style={{ opacity: 0.9, margin: 0, maxWidth: '500px', lineHeight: 1.5, textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+            Help us improve the UA Canteen. Your submission is mathematically sealed and linked to your verified identity.
+          </p>
+        </div>
 
-        {status === "idle" && (
-          <button type="button" className="btn btn-secondary feedback-hero-back" onClick={() => navigate('landing')}>
-            Back to Home
-          </button>
-        )}
-      </div>
+        <div style={{ width: '100%', maxWidth: '900px', backgroundColor: colors.white, borderRadius: '16px', boxShadow: '0 20px 50px rgba(0,0,0,0.15)', border: `1px solid ${colors.border}`, overflow: 'hidden' }}>
+          
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', padding: '24px 0', borderBottom: `1px solid ${colors.border}`, backgroundColor: '#FAFAFA' }}>
+            {[1, 2, 3].map((num, idx) => (
+              <React.Fragment key={num}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 600, transition: 'all 0.3s', border: `2px solid ${step >= num ? colors.navy : colors.border}`, color: step >= num ? (step === num ? colors.white : colors.navy) : '#94A3B8', backgroundColor: step === num ? colors.navy : colors.white }}>{num}</div>
+                {idx < 2 && <div style={{ width: '40px', height: '2px', backgroundColor: step > num ? colors.navy : colors.border, transition: 'all 0.3s' }}></div>}
+              </React.Fragment>
+            ))}
+          </div>
 
-      {/* 1-2-3 PROGRESS INDICATOR */}
-      <div className="step-indicator animate-in" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', margin: '30px 0' }}>
-        {[1, 2, 3].map((num, idx) => (
-          <React.Fragment key={num}>
-            <div style={{ 
-              width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', 
-              fontSize: '15px', fontWeight: 600, transition: 'all 0.3s',
-              border: `2px solid ${step >= num ? 'var(--accent-gold)' : 'var(--border-color)'}`, 
-              color: step >= num ? (step === num ? 'white' : 'var(--accent-gold)') : '#999',
-              backgroundColor: step === num ? 'var(--accent-gold)' : 'transparent',
-              boxShadow: step === num ? '0 4px 12px rgba(212, 160, 23, 0.3)' : 'none'
-            }}>
-              {num}
-            </div>
-            {idx < 2 && <div style={{ width: '40px', height: '2px', backgroundColor: step > num ? 'var(--accent-gold)' : 'var(--border-color)', transition: 'all 0.3s' }}></div>}
-          </React.Fragment>
-        ))}
-      </div>
+          <div className="card-inner">
+            
+            {/* --- STEP 1: FORM --- */}
+            {step === 1 && status !== "signing" && (
+              <div style={{ animation: 'fadeUp 0.4s ease' }}>
 
-      <div className="card feedback-card animate-in" style={{ width: '100%', maxWidth: '1040px', padding: '40px', position: 'relative', overflow: 'hidden' }}>
-        
-        {/* --- STEP 1: ALL-IN-ONE FORM --- */}
-        {step === 1 && status !== "signing" && (
-          <div className="animate-in feedback-step1">
-
-            <div className="feedback-full-width" style={{ marginBottom: '22px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '8px', letterSpacing: '0.5px' }}>CUSTOMER NAME (OPTIONAL)</label>
-              <input name="customer_name" placeholder="e.g. Maria Santos" value={form.customer_name} onChange={handleChange} style={{ width: '100%', padding: '14px 16px', fontSize: '15px', borderRadius: '10px', border: '1px solid var(--border-color)', backgroundColor: 'var(--input-bg)' }} />
-            </div>
-
-            <div className="feedback-step1-grid">
-              <div>
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '15px', letterSpacing: '0.5px' }}>RATE YOUR EXPERIENCE</label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {Object.keys(ratings).map((category) => (
-                      <div key={category} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', backgroundColor: 'var(--input-bg)', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-                        <span style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-dark)' }}>{category}</span>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          {[1, 2, 3, 4, 5].map((star) => {
-                            const isHovered = hoverRating.category === category && hoverRating.val >= star;
-                            const isActive = ratings[category] >= star;
-                            return (
-                              <Star key={star} size={24} onClick={() => handleRatingChange(category, star)} onMouseEnter={() => setHoverRating({ category, val: star })} onMouseLeave={() => setHoverRating({ category: '', val: 0 })} fill={isHovered || isActive ? 'var(--accent-gold)' : 'transparent'} color={isHovered || isActive ? 'var(--accent-gold)' : '#dcd8ce'} style={{ cursor: 'pointer', transition: 'all 0.2s', transform: isHovered ? 'scale(1.15)' : 'scale(1)' }} />
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '8px', letterSpacing: '0.5px' }}>ADDITIONAL COMMENTS</label>
-                  <textarea name="comment" placeholder="Tell us what you liked or how we can improve..." value={form.comment} onChange={handleChange} style={{ width: '100%', height: '158px', padding: '16px', fontSize: '15px', borderRadius: '10px', border: '1px solid var(--border-color)', backgroundColor: 'var(--input-bg)', resize: 'vertical' }}></textarea>
-                </div>
-
-                <div style={{ marginBottom: '0' }}>
-                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '8px', letterSpacing: '0.5px' }}>PHOTO EVIDENCE (OPTIONAL)</label>
-                  <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} style={{ display: 'none' }} />
-
-                  {!imagePreview ? (
-                    <div onClick={() => fileInputRef.current.click()} style={{ width: '100%', minHeight: '156px', padding: '24px', border: '2px dashed var(--border-color)', borderRadius: '12px', backgroundColor: 'var(--input-bg)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-gold)'} onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border-color)'}>
-                      <UploadCloud size={32} color="#aaa" />
-                      <span style={{ fontSize: '14px', color: '#666', fontWeight: 500, textAlign: 'center' }}>Click to upload a photo of your meal or receipt</span>
+                {/* DYNAMIC STALL SELECTION UI */}
+                <div style={{ backgroundColor: colors.white, borderRadius: '12px', border: `1px solid ${colors.border}`, padding: '24px', marginBottom: '24px' }}>
+                  <label style={{ fontSize: '12px', color: colors.navy, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '16px', letterSpacing: '0.05em' }}>
+                    SELECT FOOD STALL <span style={{ color: colors.red }}>*</span>
+                  </label>
+                  
+                  {loadingStalls ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: colors.textMuted, fontSize: '14px', padding: '16px 0' }}>
+                      <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} color={colors.navy} /> Loading available stalls...
                     </div>
                   ) : (
-                    <div style={{ position: 'relative', width: '100%', height: '156px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                      <img src={imagePreview} alt="Evidence Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      <button type="button" onClick={() => setImagePreview(null)} style={{ position: 'absolute', top: '10px', right: '10px', backgroundColor: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', borderRadius: '50%', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                        <X size={16} />
-                      </button>
+                    <div className="stall-grid">
+                      {availableStalls.map((stall) => (
+                        <button
+                          key={stall}
+                          type="button"
+                          onClick={() => setSelectedStall(stall)}
+                          style={{
+                            padding: '14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit',
+                            backgroundColor: selectedStall === stall ? colors.navy : colors.bg,
+                            color: selectedStall === stall ? colors.white : colors.text,
+                            border: `1px solid ${selectedStall === stall ? colors.navy : colors.border}`,
+                            display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', textAlign: 'center'
+                          }}
+                        >
+                          <Store size={16} color={selectedStall === stall ? colors.gold : colors.textMuted} />
+                          {stall}
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
-              </div>
-            </div>
 
-            <div className="feedback-full-width" style={{ marginTop: '28px' }}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                style={{ width: '100%', padding: '16px', fontSize: '16px' }}
-                onClick={() => {
-                  setErrorMessage("");
-                  setStatus("idle");
-                  setStep(2);
-                }}
-              >
-                Review Feedback
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* --- STEP 2: REVIEW --- */}
-        {step === 2 && status !== "signing" && status !== "success" && (
-          <div className="animate-in">
-            <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-              <CheckCircle2 size={46} color="var(--success)" style={{ marginBottom: '15px' }} />
-              <h3 className="serif" style={{ color: 'var(--text-dark)', fontSize: '1.8rem' }}>Review Your Data</h3>
-              <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Verify your responses before applying the cryptographic seal.</p>
-            </div>
-
-            <div style={{ backgroundColor: 'var(--input-bg)', borderRadius: '16px', padding: '25px', marginBottom: '30px', border: '1px solid var(--border-color)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '15px', marginBottom: '15px' }}>
-                <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>SUBMITTED BY</span>
-                <span style={{ fontWeight: 600, fontSize: '15px' }}>{form.customer_name || 'Anonymous'}</span>
-              </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '15px', marginBottom: '15px' }}>
-                <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>OVERALL SCORE</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontWeight: 700, color: 'var(--accent-gold)', fontSize: '18px' }}>{overallRating} / 5</span>
-                  <Star size={16} fill="var(--accent-gold)" color="var(--accent-gold)" />
-                </div>
-              </div>
-
-              {/* 👉 NEW: Review Image Preview Logic */}
-              <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '15px', marginBottom: '15px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: imagePreview ? '12px' : '0' }}>
-                  <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>ATTACHMENTS</span>
-                  <span style={{ fontWeight: 500, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px', color: imagePreview ? 'var(--success)' : '#999' }}>
-                    {imagePreview ? <><ImageIcon size={16} /> 1 Photo Attached</> : 'None'}
-                  </span>
-                </div>
-                {imagePreview && (
-                  <div style={{ padding: '10px', backgroundColor: '#fff', borderRadius: '10px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'center' }}>
-                    <img src={imagePreview} alt="Evidence Preview" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '6px', objectFit: 'contain' }} />
+                <div className="form-grid">
+                  
+                  {/* Ratings Column */}
+                  <div style={{ backgroundColor: colors.white, borderRadius: '12px', border: `1px solid ${colors.border}`, padding: '24px' }}>
+                    <label style={{ fontSize: '12px', color: colors.navy, fontWeight: 700, display: 'block', marginBottom: '16px', letterSpacing: '0.05em' }}>CATEGORY SCORING</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {Object.keys(ratings).map((category) => (
+                        <div key={category} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: colors.bg, borderRadius: '8px', border: `1px solid transparent` }}>
+                          <span style={{ fontWeight: 600, fontSize: '14px', color: colors.text }}>{category}</span>
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            {[1, 2, 3, 4, 5].map((star) => {
+                              const isHovered = hoverRating.category === category && hoverRating.val >= star;
+                              const isActive = ratings[category] >= star;
+                              return (
+                                <Star 
+                                  key={star} size={22} 
+                                  onClick={() => handleRatingChange(category, star)} 
+                                  onMouseEnter={() => setHoverRating({ category, val: star })} 
+                                  onMouseLeave={() => setHoverRating({ category: '', val: 0 })} 
+                                  fill={isHovered || isActive ? colors.gold : 'transparent'} 
+                                  color={isHovered || isActive ? colors.gold : '#CBD5E1'} 
+                                  style={{ cursor: 'pointer', transition: 'transform 0.1s', transform: isHovered ? 'scale(1.15)' : 'scale(1)' }} 
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                )}
-              </div>
 
-              <div style={{ marginBottom: '15px' }}>
-                <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '10px' }}>CATEGORY BREAKDOWN</span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  {Object.entries(ratings).map(([cat, val]) => (
-                    <div key={cat} style={{ fontSize: '13px', backgroundColor: 'white', padding: '6px 12px', borderRadius: '20px', border: '1px solid var(--border-color)' }}>{cat}: <strong>{val}</strong></div>
-                  ))}
+                  {/* Comments & Upload Column */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', color: colors.textMuted, fontWeight: 600, display: 'block', marginBottom: '8px', letterSpacing: '0.05em' }}>ADDITIONAL COMMENTS</label>
+                      <textarea 
+                        name="comment" placeholder="Tell us what you liked or how we can improve..." value={form.comment} onChange={handleChange} 
+                        style={{ width: '100%', height: '140px', padding: '16px', fontSize: '15px', borderRadius: '8px', border: `1px solid ${colors.border}`, backgroundColor: colors.bg, resize: 'none', outline: 'none', color: colors.text, fontFamily: 'inherit', transition: 'border 0.2s', boxSizing: 'border-box' }}
+                        onFocus={(e) => e.target.style.borderColor = colors.navy}
+                        onBlur={(e) => e.target.style.borderColor = colors.border}
+                      ></textarea>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '12px', color: colors.textMuted, fontWeight: 600, display: 'block', marginBottom: '8px', letterSpacing: '0.05em' }}>PHOTO EVIDENCE (OPTIONAL)</label>
+                      <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} style={{ display: 'none' }} />
+
+                      {!imagePreview ? (
+                        <div 
+                          onClick={() => fileInputRef.current.click()} 
+                          style={{ width: '100%', minHeight: '100px', padding: '24px', border: `2px dashed ${colors.border}`, borderRadius: '8px', backgroundColor: colors.bg, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.2s', boxSizing: 'border-box' }} 
+                          onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.navy} 
+                          onMouseLeave={(e) => e.currentTarget.style.borderColor = colors.border}
+                        >
+                          <UploadCloud size={24} color={colors.textMuted} />
+                          <span style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 500, textAlign: 'center' }}>Click to upload photo</span>
+                        </div>
+                      ) : (
+                        <div style={{ position: 'relative', width: '100%', height: '120px', borderRadius: '8px', overflow: 'hidden', border: `1px solid ${colors.border}` }}>
+                          <img src={imagePreview} alt="Evidence Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <button type="button" onClick={() => setImagePreview(null)} style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    disabled={!selectedStall}
+                    style={{ 
+                      padding: '16px 40px', fontSize: '15px', fontWeight: 600, 
+                      backgroundColor: selectedStall ? colors.navy : '#94A3B8', 
+                      color: colors.white, border: 'none', borderRadius: '8px', 
+                      cursor: selectedStall ? 'pointer' : 'not-allowed', 
+                      transition: 'all 0.2s', boxShadow: selectedStall ? '0 4px 12px rgba(12, 35, 64, 0.2)' : 'none', 
+                      fontFamily: 'inherit', width: '100%', maxWidth: '300px' 
+                    }}
+                    onMouseEnter={(e) => { if(selectedStall) { e.currentTarget.style.backgroundColor = '#17365C'; e.currentTarget.style.transform = 'translateY(-2px)'; } }}
+                    onMouseLeave={(e) => { if(selectedStall) { e.currentTarget.style.backgroundColor = colors.navy; e.currentTarget.style.transform = 'none'; } }}
+                    onClick={() => { setErrorMessage(""); setStatus("idle"); setStep(2); }}
+                  >
+                    {selectedStall ? 'Continue to Review' : 'Select a Stall First'}
+                  </button>
                 </div>
               </div>
-
-              {form.comment && (
-                <div style={{ paddingTop: '15px', borderTop: '1px solid var(--border-color)' }}>
-                  <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '8px' }}>COMMENTS</span>
-                  <p style={{ fontSize: '15px', fontStyle: 'italic', color: '#555', lineHeight: '1.5', margin: 0 }}>"{form.comment}"</p>
-                </div>
-              )}
-            </div>
-
-            {status === "error" && (
-              <div className="animate-in" style={{ marginBottom: '25px', padding: '16px', borderRadius: '10px', textAlign: 'center', fontSize: '14px', fontWeight: 600, backgroundColor: 'var(--danger-bg)', color: 'var(--danger)' }}>Error: {errorMessage}</div>
             )}
 
-            <div style={{ display: 'flex', gap: '15px' }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                style={{ flex: 1, padding: '16px', fontSize: '15px' }}
-                onClick={() => {
-                  setStatus("idle");
-                  setErrorMessage("");
-                  setStep(1);
-                }}
-              >
-                Edit Details
-              </button>
-              <button type="button" className="btn btn-dark" style={{ flex: 2, padding: '16px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onClick={handleSubmit}>
-                <Lock size={18} /> Sign & Submit Securely
-              </button>
-            </div>
-          </div>
-        )}
+            {/* --- STEP 2: REVIEW --- */}
+            {step === 2 && status !== "signing" && status !== "success" && (
+              <div style={{ animation: 'fadeUp 0.4s ease' }}>
+                
+                <div style={{ backgroundColor: colors.bg, borderRadius: '12px', padding: '24px', marginBottom: '32px', border: `1px solid ${colors.border}` }}>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${colors.border}`, paddingBottom: '16px', marginBottom: '16px' }}>
+                    <span style={{ fontSize: '12px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em' }}>SELECTED STALL</span>
+                    <span style={{ fontWeight: 700, fontSize: '14px', color: colors.navy, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Store size={16} color={colors.gold} /> {selectedStall}
+                    </span>
+                  </div>
 
-        {/* --- STEP 3/OVERLAY: CRYPTO ANIMATION --- */}
-        {status === "signing" && (
-          <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', textAlign: 'center' }}>
-            <Loader2 size={48} color="var(--accent-gold)" style={{ animation: 'spin 1.5s linear infinite', marginBottom: '25px' }} />
-            <h3 className="serif" style={{ fontSize: '1.8rem', color: 'var(--bg-dark-green)', marginBottom: '10px' }}>Securing Data</h3>
-            <p style={{ color: '#666', fontSize: '15px', fontFamily: 'monospace', backgroundColor: '#f5f5f5', padding: '8px 16px', borderRadius: '8px' }}>&gt; {signMessage}</p>
-            <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
-          </div>
-        )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${colors.border}`, paddingBottom: '16px', marginBottom: '16px' }}>
+                    <span style={{ fontSize: '12px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em' }}>VERIFIED IDENTITY</span>
+                    <span style={{ fontWeight: 600, fontSize: '14px', color: colors.success, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <CheckCircle2 size={16} /> {user.full_name}
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${colors.border}`, paddingBottom: '16px', marginBottom: '16px' }}>
+                    <span style={{ fontSize: '12px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em' }}>OVERALL SCORE</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontWeight: 700, color: colors.navy, fontSize: '18px' }}>{overallRating} / 5</span>
+                      <Star size={16} fill={colors.gold} color={colors.gold} />
+                    </div>
+                  </div>
 
-        {/* --- STEP 3: SUCCESS & DOWNLOAD RECEIPT --- */}
-        {status === "success" && (
-          <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px 0', textAlign: 'center' }}>
-            <div style={{ width: '80px', height: '80px', backgroundColor: 'var(--success-bg)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '25px' }}>
-              <ShieldCheck size={40} color="var(--success)" />
-            </div>
-            <h3 className="serif" style={{ fontSize: '2.2rem', color: 'var(--bg-dark-green)', marginBottom: '10px' }}>Signature Verified</h3>
-            <p style={{ color: '#666', fontSize: '15px', marginBottom: '35px' }}>Your feedback and attachments were successfully encrypted and submitted.</p>
-            
-            {/* Download Receipt Button */}
-            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              <button 
-                type="button"
-                onClick={downloadReceipt}
-                className="btn btn-secondary" 
-                style={{ padding: '16px', fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', backgroundColor: 'var(--input-bg)', border: '1px solid var(--accent-gold)', color: 'var(--text-dark)' }}
-              >
-                <Download size={18} color="var(--accent-gold)" /> Download Security Receipt (.txt)
-              </button>
-              
-              <button 
-                type="button"
-                onClick={() => navigate('landing')}
-                className="btn btn-primary" 
-                style={{ padding: '16px', fontSize: '15px' }}
-              >
-                Return to Home
-              </button>
-            </div>
-          </div>
-        )}
+                  <div style={{ borderBottom: form.comment || imagePreview ? `1px solid ${colors.border}` : 'none', paddingBottom: form.comment || imagePreview ? '16px' : '0', marginBottom: form.comment || imagePreview ? '16px' : '0' }}>
+                    <span style={{ fontSize: '12px', color: colors.textMuted, fontWeight: 600, display: 'block', marginBottom: '12px', letterSpacing: '0.05em' }}>CATEGORY BREAKDOWN</span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {Object.entries(ratings).map(([cat, val]) => (
+                        <div key={cat} style={{ fontSize: '12px', backgroundColor: colors.white, padding: '6px 12px', borderRadius: '20px', border: `1px solid ${colors.border}`, fontWeight: 500, color: colors.text }}>
+                          {cat}: <strong style={{ color: colors.navy }}>{val}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
+                  {form.comment && (
+                    <div style={{ borderBottom: imagePreview ? `1px solid ${colors.border}` : 'none', paddingBottom: imagePreview ? '16px' : '0', marginBottom: imagePreview ? '16px' : '0' }}>
+                      <span style={{ fontSize: '12px', color: colors.textMuted, fontWeight: 600, display: 'block', marginBottom: '8px', letterSpacing: '0.05em' }}>COMMENTS</span>
+                      <p style={{ fontSize: '14px', fontStyle: 'italic', color: colors.text, lineHeight: '1.6', margin: 0 }}>"{form.comment}"</p>
+                    </div>
+                  )}
+
+                  {imagePreview && (
+                    <div>
+                      <span style={{ fontSize: '12px', color: colors.textMuted, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', letterSpacing: '0.05em' }}>
+                        <ImageIcon size={14} /> ATTACHED EVIDENCE
+                      </span>
+                      <img src={imagePreview} alt="Evidence Preview" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', objectFit: 'contain', border: `1px solid ${colors.border}`, backgroundColor: colors.white, padding: '8px' }} />
+                    </div>
+                  )}
+                </div>
+
+                {status === "error" && (
+                  <div style={{ marginBottom: '24px', padding: '16px', borderRadius: '8px', textAlign: 'center', fontSize: '14px', fontWeight: 600, backgroundColor: '#FFE4E6', color: '#E11D48', border: '1px solid #FDA4AF' }}>
+                    Error: {errorMessage}
+                  </div>
+                )}
+
+                <div className="action-buttons">
+                  <button
+                    type="button"
+                    style={{ padding: '16px 32px', fontSize: '15px', fontWeight: 600, backgroundColor: colors.white, color: colors.text, border: `1px solid ${colors.border}`, borderRadius: '8px', cursor: 'pointer', transition: 'background-color 0.2s', fontFamily: 'inherit' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.bg}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = colors.white}
+                    onClick={() => { setStatus("idle"); setErrorMessage(""); setStep(1); }}
+                  >
+                    Back to Edit
+                  </button>
+                  <button 
+                    type="button" 
+                    style={{ flex: 1, maxWidth: '400px', padding: '16px', fontSize: '15px', fontWeight: 600, backgroundColor: colors.navy, color: colors.white, border: 'none', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(12, 35, 64, 0.2)', fontFamily: 'inherit' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#17365C'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = colors.navy; e.currentTarget.style.transform = 'none'; }}
+                    onClick={handleSubmit}
+                  >
+                    <Lock size={16} color={colors.gold} /> Sign & Submit
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* --- STEP 3: CRYPTO ANIMATION --- */}
+            {status === "signing" && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', textAlign: 'center', animation: 'fadeUp 0.4s ease' }}>
+                <Loader2 size={48} color={colors.navy} style={{ animation: 'spin 1.5s linear infinite', marginBottom: '24px' }} />
+                <h3 style={{ fontSize: '24px', fontWeight: 700, color: colors.navy, marginBottom: '12px', letterSpacing: '-0.02em' }}>Securing Data Payload</h3>
+                <div style={{ backgroundColor: '#0F172A', color: '#10B981', padding: '16px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '13px', width: '100%', maxWidth: '450px', textAlign: 'left', border: '1px solid #1E293B', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)', wordBreak: 'break-all' }}>
+                  <span style={{ animation: 'pulse 1.5s infinite' }}>&gt; {signMessage}</span>
+                </div>
+                <style>{`
+                  @keyframes spin { 100% { transform: rotate(360deg); } }
+                  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+                  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+                `}</style>
+              </div>
+            )}
+
+            {/* --- STEP 4: MODERN DIGITAL RECEIPT WITH COPY & SCREENSHOT UX --- */}
+            {status === "success" && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 0', textAlign: 'center', animation: 'fadeUp 0.4s ease' }}>
+                
+                <div style={{ width: '70px', height: '70px', backgroundColor: '#D1FAE5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px', border: '4px solid #10B981' }}>
+                  <ShieldCheck size={36} color="#10B981" />
+                </div>
+                
+                <h3 style={{ fontSize: '26px', fontWeight: 700, color: colors.navy, marginBottom: '8px', letterSpacing: '-0.02em' }}>Review Secured</h3>
+                <p style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '24px', maxWidth: '400px', lineHeight: 1.6 }}>
+                  Your feedback for <strong>{selectedStall}</strong> is now mathematically sealed in the database.
+                </p>
+                
+                <div style={{ width: '100%', maxWidth: '440px', backgroundColor: colors.bg, border: `1px solid ${colors.border}`, borderRadius: '12px', padding: '20px', marginBottom: '24px', textAlign: 'left' }}>
+                  <label style={{ fontSize: '11px', color: colors.textMuted, fontWeight: 700, display: 'block', marginBottom: '8px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                    YOUR ED25519 RECEIPT SIGNATURE
+                  </label>
+                  <div style={{ fontFamily: 'monospace', fontSize: '13px', color: colors.navy, backgroundColor: colors.white, padding: '12px', borderRadius: '6px', border: `1px solid ${colors.border}`, wordBreak: 'break-all', marginBottom: '12px', lineHeight: 1.4 }}>
+                    {receiptData?.signature || 'Generating...'}
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <button 
+                      onClick={copyToClipboard}
+                      style={{ flex: 1, padding: '12px', fontSize: '14px', fontWeight: 600, backgroundColor: copied ? colors.success : colors.white, color: copied ? colors.white : colors.text, border: `1px solid ${copied ? colors.success : colors.border}`, borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'all 0.2s', fontFamily: 'inherit' }}
+                    >
+                      {copied ? <><CheckCircle2 size={16} /> Copied!</> : <><Copy size={16} /> Copy Signature</>}
+                    </button>
+                  </div>
+                  <p style={{ fontSize: '12px', color: colors.textMuted, textAlign: 'center', margin: '16px 0 0 0' }}>
+                    📸 Tip: Take a screenshot of this page for your records.
+                  </p>
+                </div>
+                
+                <button 
+                  type="button"
+                  onClick={handleLogout}
+                  style={{ width: '100%', maxWidth: '440px', padding: '16px', fontSize: '15px', fontWeight: 600, backgroundColor: colors.navy, color: colors.white, border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background-color 0.2s', fontFamily: 'inherit' }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#17365C'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = colors.navy}
+                >
+                  Logout & Return Home
+                </button>
+
+              </div>
+            )}
+
+          </div>
+        </div>
       </div>
     </div>
   );

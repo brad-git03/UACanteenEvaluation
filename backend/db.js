@@ -10,6 +10,17 @@ const pool = new Pool(
 async function initDB() {
     try {
         await pool.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                ua_id VARCHAR(50) UNIQUE NOT NULL, 
+                full_name VARCHAR(100) NOT NULL,
+                role VARCHAR(20) NOT NULL DEFAULT 'student', 
+                password_hash VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        await pool.query(`
             CREATE TABLE IF NOT EXISTS feedbacks (
                 id SERIAL PRIMARY KEY,
                 customer_name VARCHAR(100),
@@ -21,30 +32,46 @@ async function initDB() {
             );
         `);
         
-        // 👉 CRITICAL FIX: Automatically upgrade your database to accept photos
         await pool.query(`ALTER TABLE feedbacks ADD COLUMN IF NOT EXISTS attachment TEXT;`);
         await pool.query(`ALTER TABLE feedbacks ADD COLUMN IF NOT EXISTS is_quarantined BOOLEAN DEFAULT FALSE;`);
+        await pool.query(`ALTER TABLE feedbacks ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
         
-        console.log("✅ Database initialized: 'feedbacks' table is ready with new columns.");
+        // 👉 THIS IS THE MISSING PIECE!
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS stalls (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) UNIQUE NOT NULL
+            );
+        `);
+
+        const stallCount = await pool.query('SELECT COUNT(*) FROM stalls');
+        if (parseInt(stallCount.rows[0].count) === 0) {
+            await pool.query(`
+                INSERT INTO stalls (name) VALUES 
+                ('Main Hot Meals'), ('Snacks & Sandwiches'), ('Drinks & Desserts'), ('Noodles & Dimsum'), ('Fast Food Corner');
+            `);
+            console.log("🍽️ Automatically inserted 5 default food stalls.");
+        }
+
+        console.log("✅ Database initialized: 'users', 'feedbacks', and 'stalls' tables are ready.");
     } catch (err) {
-        console.error("❌ Failed to create table. Check your credentials:", err.message);
+        console.error("❌ Failed to create table:", err.message);
     }
 }
 
 initDB();
 
-async function addFeedback({ customer_name, rating, comment, signature, public_key, attachment }) {
-    const result = await pool.query(
-        `INSERT INTO feedbacks (customer_name, rating, comment, signature, public_key, attachment)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING *`,
-        [customer_name, rating, comment, signature, public_key, attachment || null]
-    );
-    return result.rows[0];
-}
+const addFeedback = async ({ user_id, customer_name, rating, comment, signature, public_key, attachment }) => {
+    const query = `
+        INSERT INTO feedbacks (user_id, customer_name, rating, comment, signature, public_key, attachment)
+        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, created_at
+    `;
+    const values = [user_id, customer_name, rating, comment, signature, public_key, attachment];
+    const res = await pool.query(query, values);
+    return res.rows[0];
+};
 
 async function getAllFeedback() {
-    // We must fetch attachment so the backend can verify the signature hash!
     const result = await pool.query(`SELECT * FROM feedbacks ORDER BY created_at DESC`);
     return result.rows;
 }
@@ -74,4 +101,22 @@ async function getLightFeedbacks() {
     return result.rows;
 }
 
-module.exports = { addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback, tamperFeedback, getLightFeedbacks, getFeedbackPhoto };
+async function getAllStalls() {
+    const result = await pool.query(`SELECT * FROM stalls ORDER BY name ASC`);
+    return result.rows;
+}
+
+async function addStall(name) {
+    const result = await pool.query(`INSERT INTO stalls (name) VALUES ($1) RETURNING *`, [name]);
+    return result.rows[0];
+}
+
+async function deleteStall(id) {
+    await pool.query(`DELETE FROM stalls WHERE id = $1`, [id]);
+}
+
+module.exports = { 
+    pool, addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback, 
+    tamperFeedback, getLightFeedbacks, getFeedbackPhoto,
+    getAllStalls, addStall, deleteStall 
+};

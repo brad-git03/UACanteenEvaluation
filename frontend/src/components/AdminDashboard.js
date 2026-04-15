@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef } from "react";
+import StallManager from './StallManager';
 import { getAllFeedbacks, verifyFeedback, deleteFeedback, quarantineFeedback, getFeedbackPhoto } from "../api";
 import {
   PieChart, Pie, Cell, Tooltip as PieTooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as BarTooltip
 } from 'recharts';
-import { Camera, LayoutDashboard, FileText, LogOut, ShieldCheck, X, Star, Key, Hash, ShieldAlert, Search, Download, AlertTriangle, Clock, Terminal, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Camera, LayoutDashboard, FileText, LogOut, ShieldCheck, X, Star, Key, Hash, ShieldAlert, Search, Download, AlertTriangle, Clock, Terminal, Trash2, ChevronLeft, ChevronRight, Loader2, Store } from 'lucide-react';
 
 export default function AdminDashboard({ navigate }) {
   const [feedbacks, setFeedbacks] = useState([]);
@@ -17,7 +18,7 @@ export default function AdminDashboard({ navigate }) {
   const [traceModal, setTraceModal] = useState(null);
   const [traceStatus, setTraceStatus] = useState('loading');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 6; 
+  const itemsPerPage = 6;
 
   const isAuditingRef = useRef(isAuditing);
   useEffect(() => { isAuditingRef.current = isAuditing; }, [isAuditing]);
@@ -29,8 +30,7 @@ export default function AdminDashboard({ navigate }) {
       try {
         const data = await getAllFeedbacks();
         setFeedbacks(data);
-        
-        // No more N+1 HTTP calls! We use the bulk verified flags from the backend directly.
+
         const results = data.map(f => ({
           id: f.id,
           status: f._is_signature_valid ? "valid" : "invalid"
@@ -56,22 +56,37 @@ export default function AdminDashboard({ navigate }) {
       }
     };
 
-    fetchAndAudit(); 
-    const intervalId = setInterval(fetchAndAudit, 3000); 
-    return () => clearInterval(intervalId); 
+    fetchAndAudit();
+    const intervalId = setInterval(fetchAndAudit, 3000);
+    return () => clearInterval(intervalId);
   }, []);
 
-  // --- CORE LOGIC: DYNAMIC DATA ISOLATION ---
+  // --- BRAND COLORS ---
+  const colors = {
+    navy: '#0C2340',
+    gold: '#E5A823',
+    bg: '#F8FAFC',
+    white: '#FFFFFF',
+    text: '#1E293B',
+    textMuted: '#64748B',
+    border: '#E2E8F0',
+    danger: '#EF4444',
+    dangerBg: '#FEF2F2',
+    success: '#10B981',
+    successBg: '#ECFDF5'
+  };
+
+  const modernFont = "'Geist', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
   const isCompromised = (f) => f.is_quarantined || verifyState[f.id]?.status === 'invalid';
-  
+
   const safeFeedbacks = feedbacks.filter(f => !isCompromised(f));
   const compromisedFeedbacks = feedbacks.filter(f => isCompromised(f));
   const activeBreachCount = compromisedFeedbacks.length;
 
-  // --- PAGINATION & VIEW ROUTING ---
   let displayedFeedbacks = [];
   if (activeMenu === 'dashboard' || activeMenu === 'records') displayedFeedbacks = safeFeedbacks;
-  else if (activeMenu === 'verify') displayedFeedbacks = feedbacks; 
+  else if (activeMenu === 'verify') displayedFeedbacks = feedbacks;
   else if (activeMenu === 'quarantine') displayedFeedbacks = compromisedFeedbacks;
 
   const searchedFeedbacks = displayedFeedbacks.filter(f =>
@@ -84,11 +99,12 @@ export default function AdminDashboard({ navigate }) {
   const currentItems = searchedFeedbacks.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(searchedFeedbacks.length / itemsPerPage);
 
-  // --- GRAPH CALCULATIONS (USING ONLY SAFE DATA) ---
   const total = safeFeedbacks.length;
   const avgValue = total > 0 ? Number((safeFeedbacks.reduce((sum, f) => sum + f.rating, 0) / total).toFixed(2)) : 0;
   const avgPercent = Math.round((avgValue / 5) * 100);
   const avgLabel = avgValue >= 4.5 ? "Excellent" : avgValue >= 3.5 ? "Good" : avgValue >= 2.5 ? "Fair" : "Needs Improvement";
+
+  const CHART_COLORS = [colors.navy, '#3B82F6', colors.gold, '#FBBF24', colors.danger];
 
   const pieData = [5, 4, 3, 2, 1].map(star => ({
     star, name: `${star} Stars`,
@@ -97,7 +113,6 @@ export default function AdminDashboard({ navigate }) {
   })).filter(d => d.value > 0);
   const dominantRating = pieData.length > 0 ? pieData.reduce((best, current) => current.value > best.value ? current : best, pieData[0]) : { star: 'N/A' };
 
-  const COLORS = ['#0a1b3f', '#4169e1', '#d4a017', '#e6c25a', '#c93b3b'];
   const categoryTotals = { Food: 0, Service: 0, Staff: 0, Clean: 0, Value: 0 };
   let count = 0;
 
@@ -119,7 +134,6 @@ export default function AdminDashboard({ navigate }) {
   ];
   const topCategory = count > 0 ? [...barData].sort((a, b) => b.score - a.score)[0] : { name: "N/A", score: 0 };
 
-  // --- ACTIONS ---
   const openModal = async (f) => {
     setSelectedFeedback(f);
     if (f.has_attachment && !f.attachment) {
@@ -235,33 +249,52 @@ export default function AdminDashboard({ navigate }) {
     };
   };
 
+  // UI COMPONENTS
   const MenuItem = ({ id, icon: Icon, label, badge }) => {
     const isActive = activeMenu === id;
     return (
-      <div onClick={() => setActiveMenu(id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: isActive ? 'rgba(255,255,255,0.1)' : 'transparent', borderRadius: '10px', color: isActive ? 'var(--accent-gold)' : '#a0aab2', marginBottom: '10px', cursor: 'pointer', transition: 'all 0.2s', fontSize: '16px' }}>
+      <div
+        onClick={() => setActiveMenu(id)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px',
+          background: isActive ? 'rgba(255,255,255,0.1)' : 'transparent', borderRadius: '8px',
+          cursor: 'pointer', transition: 'all 0.2s', marginBottom: '8px', color: isActive ? colors.gold : colors.white,
+          border: isActive ? '1px solid rgba(255,255,255,0.1)' : '1px solid transparent'
+        }}
+        onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+        onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <Icon size={22} /> <span style={{ fontWeight: isActive ? 500 : 400 }}>{label}</span>
+          <Icon size={20} /> <span style={{ fontWeight: isActive ? 600 : 400, fontSize: '15px' }}>{label}</span>
         </div>
         {badge > 0 && (
-          <span style={{ backgroundColor: 'var(--danger)', color: 'white', fontSize: '12px', fontWeight: 'bold', padding: '2px 8px', borderRadius: '12px' }}>{badge}</span>
+          <span style={{ backgroundColor: colors.danger, color: colors.white, fontSize: '12px', fontWeight: 'bold', padding: '2px 8px', borderRadius: '12px' }}>{badge}</span>
         )}
       </div>
     );
   };
 
   const PaginationControls = () => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '15px 0', borderTop: '1px solid #eee' }}>
-      <span style={{ fontSize: '14px', color: '#888' }}>
-        Showing <strong>{currentItems.length > 0 ? indexOfFirstItem + 1 : 0}</strong> to <strong>{Math.min(indexOfLastItem, searchedFeedbacks.length)}</strong> of <strong>{searchedFeedbacks.length}</strong> records
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '24px', padding: '16px 0', borderTop: `1px solid ${colors.border}` }}>
+      <span style={{ fontSize: '14px', color: colors.textMuted }}>
+        Showing <strong>{currentItems.length > 0 ? indexOfFirstItem + 1 : 0}</strong> to <strong>{Math.min(indexOfLastItem, searchedFeedbacks.length)}</strong> of <strong>{searchedFeedbacks.length}</strong>
       </span>
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-        <button className="btn-secondary" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} style={{ padding: '8px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', opacity: currentPage === 1 ? 0.5 : 1 }}>
+        <button
+          disabled={currentPage === 1}
+          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+          style={{ padding: '8px 14px', fontSize: '14px', fontWeight: 500, backgroundColor: colors.white, border: `1px solid ${colors.border}`, borderRadius: '6px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: '6px', color: colors.text }}
+        >
           <ChevronLeft size={16} /> Prev
         </button>
-        <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--bg-dark-green)', padding: '0 10px' }}>
+        <span style={{ fontSize: '14px', fontWeight: 600, color: colors.navy, padding: '0 12px' }}>
           Page {currentPage} of {totalPages || 1}
         </span>
-        <button className="btn-secondary" disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} style={{ padding: '8px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', opacity: (currentPage === totalPages || totalPages === 0) ? 0.5 : 1 }}>
+        <button
+          disabled={currentPage === totalPages || totalPages === 0}
+          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+          style={{ padding: '8px 14px', fontSize: '14px', fontWeight: 500, backgroundColor: colors.white, border: `1px solid ${colors.border}`, borderRadius: '6px', cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer', opacity: (currentPage === totalPages || totalPages === 0) ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: '6px', color: colors.text }}
+        >
           Next <ChevronRight size={16} />
         </button>
       </div>
@@ -269,220 +302,267 @@ export default function AdminDashboard({ navigate }) {
   );
 
   return (
-    <div className="admin-layout" style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f9f7f1', position: 'relative' }}>
-      
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: colors.bg, fontFamily: modernFont }}>
+
       <style>{`
         @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.2); } 100% { opacity: 1; transform: scale(1); } }
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
       `}</style>
 
-      {/* SIDEBAR */}
-      <div className="admin-sidebar" style={{ width: '280px', background: 'linear-gradient(180deg, var(--bg-dark-green) 0%, #050d21 100%)', color: 'white', padding: '40px 25px', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '45px' }}>
-          <img src="/ua-logo.png" alt="University Logo" style={{ width: '46px', height: '46px', borderRadius: '50%', boxShadow: '0 4px 12px rgba(0,0,0,0.4)', border: '2px solid rgba(255,255,255,0.1)' }} />
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <h2 className="serif" style={{ color: 'white', fontSize: '1.7rem', margin: 0, lineHeight: '1.1' }}>UA <span style={{ color: 'var(--accent-gold)' }}>Canteen</span></h2>
-            <p style={{ fontSize: '11px', color: '#a0aab2', margin: 0, marginTop: '4px', letterSpacing: '0.3px' }}>EdDSA Secured • Admin</p>
+      {/* ─── SIDEBAR ─── */}
+      <div style={{
+        width: '280px',
+        backgroundColor: colors.navy,
+        color: colors.white,
+        padding: '40px 24px',
+        display: 'flex',
+        flexDirection: 'column',
+        borderRight: `4px solid ${colors.gold}` /* 👉 ADDED UNIVERSITY GOLD ACCENT LINE HERE */
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '40px' }}>
+          <img src="/ua-logo.png" alt="UA Logo" style={{ width: '48px', height: '48px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.1)' }} />
+          <div>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', color: colors.white }}>UA <span style={{ color: colors.gold }}>Canteen</span></h2>
+            <p style={{ fontSize: '12px', color: '#94A3B8', margin: '2px 0 0 0', fontWeight: 500, letterSpacing: '0.05em' }}>ADMIN PORTAL</p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#00ff00', marginBottom: '45px', paddingLeft: '60px', opacity: 0.8 }}>
-          <div style={{ width: '6px', height: '6px', backgroundColor: '#00ff00', borderRadius: '50%', animation: 'pulse 2s infinite' }}></div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', fontWeight: 600, color: colors.success, marginBottom: '40px', paddingLeft: '48px', letterSpacing: '0.05em' }}>
+          <div style={{ width: '8px', height: '8px', backgroundColor: colors.success, borderRadius: '50%', animation: 'pulse 2s infinite' }}></div>
           LIVE SYNC ACTIVE
         </div>
 
-        <MenuItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
-        <MenuItem id="records" icon={FileText} label="Safe Records" />
-        <MenuItem id="verify" icon={ShieldCheck} label="Crypto Logs" />
-        <div style={{ margin: '15px 0', borderTop: '1px solid rgba(255,255,255,0.1)' }}></div>
-        <MenuItem id="quarantine" icon={ShieldAlert} label="Quarantine" badge={activeBreachCount} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <MenuItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
+          <MenuItem id="records" icon={FileText} label="Safe Records" />
+          <MenuItem id="stalls" icon={Store} label="Manage Stalls" /> 
+          <MenuItem id="verify" icon={ShieldCheck} label="Crypto Logs" />
+          <div style={{ margin: '16px 0', borderTop: '1px solid rgba(255,255,255,0.1)' }}></div>
+          <MenuItem id="quarantine" icon={ShieldAlert} label="Quarantine" badge={activeBreachCount} />
+        </div>
 
-        <div style={{ marginTop: 'auto', background: 'rgba(255,255,255,0.05)', padding: '18px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'var(--accent-gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: 'white', fontSize: '16px' }}>A</div>
+        <div style={{ marginTop: 'auto', background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: colors.gold, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: colors.navy, fontSize: '16px' }}>A</div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '15px', fontWeight: 600 }}>UA Admin</div>
-            <div style={{ fontSize: '13px', color: '#a0aab2' }}>admin@ua.edu.ph</div>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: colors.white }}>UA Admin</div>
+            <div style={{ fontSize: '12px', color: '#94A3B8' }}>admin@ua.edu.ph</div>
           </div>
-          <LogOut size={20} color="#a0aab2" style={{ cursor: 'pointer' }} onClick={() => navigate('landing')} title="Logout" />
+          <LogOut size={18} color="#94A3B8" style={{ cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = colors.white} onMouseLeave={e => e.currentTarget.style.color = '#94A3B8'} onClick={() => navigate('landing')} title="Logout" />
         </div>
       </div>
 
-      <div className="admin-content" style={{ flex: 1, padding: '50px 60px', overflowY: 'auto' }}>
+      {/* ─── MAIN CONTENT ─── */}
+      <div style={{ flex: 1, padding: '48px 60px', overflowY: 'auto' }}>
+
+        {activeMenu === "stalls" && (
+          <div style={{ animation: 'fadeUp 0.4s ease' }}>
+            <div style={{ marginBottom: '40px' }}>
+              <h1 style={{ fontSize: '32px', fontWeight: 700, color: colors.navy, margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>
+                Manage <span style={{ color: colors.gold }}>Stalls</span>
+              </h1>
+              <p style={{ color: colors.textMuted, margin: 0, fontSize: '16px' }}>
+                Add or remove food stalls for the student feedback form.
+              </p>
+            </div>
+            
+            {/* Here is the component we created! */}
+            <StallManager />
+          </div>
+        )}
 
         {/* ---------------- VIEW 1: DASHBOARD ---------------- */}
         {activeMenu === "dashboard" && (
-          <div className="animate-in">
+          <div style={{ animation: 'fadeUp 0.4s ease' }}>
             {activeBreachCount > 0 && (
-              <div style={{ backgroundColor: 'var(--danger)', color: 'white', padding: '15px 25px', borderRadius: '12px', marginBottom: '30px', display: 'flex', alignItems: 'center', gap: '15px', boxShadow: '0 8px 24px rgba(201, 59, 59, 0.3)' }}>
-                <AlertTriangle size={28} />
+              <div style={{ backgroundColor: colors.dangerBg, border: `1px solid ${colors.danger}`, color: colors.danger, padding: '20px 24px', borderRadius: '12px', marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 4px 6px -1px rgba(239, 68, 68, 0.1)' }}>
+                <AlertTriangle size={32} />
                 <div style={{ flex: 1 }}>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>SECURITY COMPROMISED</h3>
-                  <p style={{ margin: 0, fontSize: '14px', opacity: 0.9 }}>{activeBreachCount} record(s) have failed cryptographic integrity checks. They have been isolated from your metrics.</p>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 700 }}>SECURITY COMPROMISED</h3>
+                  <p style={{ margin: 0, fontSize: '14px', color: '#991B1B' }}>{activeBreachCount} record(s) have failed cryptographic integrity checks. They have been isolated from your metrics.</p>
                 </div>
-                <button onClick={() => setActiveMenu('quarantine')} style={{ backgroundColor: 'white', color: 'var(--danger)', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>View Quarantine</button>
+                <button onClick={() => setActiveMenu('quarantine')} style={{ backgroundColor: colors.danger, color: colors.white, border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', transition: 'background 0.2s' }}>View Breach Logs</button>
               </div>
             )}
 
-            <h1 className="serif" style={{ fontSize: '2.5rem', marginBottom: '10px' }}>Dashboard <span style={{ color: 'var(--accent-gold)' }}>Overview</span></h1>
-            <p style={{ color: '#666', marginBottom: '40px', fontSize: '16px' }}>Real-time verified insights from PostgreSQL.</p>
-
-            <div className="admin-grid-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', marginBottom: '40px' }}>
-              <div className="card" style={{ borderTop: '5px solid var(--bg-dark-green)', padding: '30px' }}>
-                <div style={{ fontSize: '14px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Verified Records</div>
-                <div className="serif" style={{ fontSize: '2.8rem', color: 'var(--bg-dark-green)' }}>{total}</div>
-                <div style={{ fontSize: '14px', color: '#999' }}>Safe submissions</div>
-              </div>
-              <div className="card" style={{ borderTop: `5px solid ${activeBreachCount > 0 ? 'var(--danger)' : 'var(--success)'}`, padding: '30px', backgroundColor: activeBreachCount > 0 ? 'var(--danger-bg)' : 'white' }}>
-                <div style={{ fontSize: '14px', color: activeBreachCount > 0 ? 'var(--danger)' : '#666', fontWeight: 600, textTransform: 'uppercase' }}>System Integrity</div>
-                <div className="serif" style={{ fontSize: '2.2rem', color: activeBreachCount > 0 ? 'var(--danger)' : 'var(--success)', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {activeBreachCount > 0 ? <><ShieldAlert size={28} /> ISOLATED</> : <><ShieldCheck size={28} /> Active</>}
-                </div>
-                <div style={{ fontSize: '14px', color: activeBreachCount > 0 ? 'var(--danger)' : '#999', fontWeight: activeBreachCount > 0 ? 600 : 400 }}>
-                  {activeBreachCount > 0 ? `${activeBreachCount} tampered records hidden` : "Ed25519 Secured"}
-                </div>
-              </div>
-              <div className="card" style={{ borderTop: '5px solid var(--accent-gold)', padding: '30px' }}>
-                <div style={{ fontSize: '14px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Average Rating</div>
-                <div className="serif" style={{ fontSize: '2.8rem', color: 'var(--bg-dark-green)' }}>{avgValue.toFixed(2)} <span style={{ fontSize: '1.2rem', color: '#999' }}>/ 5</span></div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px', color: '#666', fontSize: '14px' }}>
-                  <Star size={15} color="var(--accent-gold)" fill="var(--accent-gold)" /> {avgLabel}
-                </div>
-                <div style={{ height: '8px', backgroundColor: '#ece8dc', borderRadius: '999px', overflow: 'hidden', marginBottom: '8px' }}>
-                  <div style={{ width: `${avgPercent}%`, height: '100%', backgroundColor: 'var(--accent-gold)' }} />
-                </div>
-                <div style={{ fontSize: '13px', color: '#999' }}>{avgPercent}% of maximum score</div>
-              </div>
-              <div className="card" style={{ borderTop: '5px solid #c93b3b', padding: '30px' }}>
-                <div style={{ fontSize: '14px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Top Category</div>
-                <div className="serif" style={{ fontSize: '2rem', color: 'var(--bg-dark-green)', marginTop: '12px' }}>{topCategory.name}</div>
-                <div style={{ fontSize: '14px', color: '#999', marginTop: '6px' }}>Highest rated ({topCategory.score})</div>
-              </div>
+            <div style={{ marginBottom: '40px' }}>
+              <h1 style={{ fontSize: '32px', fontWeight: 700, color: colors.navy, margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>Dashboard <span style={{ color: colors.gold }}>Overview</span></h1>
+              <p style={{ color: colors.textMuted, margin: 0, fontSize: '16px' }}>Real-time verified insights from the secure database.</p>
             </div>
 
-            <div className="admin-grid-charts" style={{ display: 'grid', gridTemplateColumns: '60% 40%', gap: '24px', marginBottom: '30px' }}>
-              <div className="card" style={{ padding: '35px' }}>
-                <h3 style={{ fontSize: '16px', textTransform: 'uppercase', color: '#666', marginBottom: '30px', letterSpacing: '0.5px' }}>Category Averages</h3>
+            {/* Stats Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '24px', marginBottom: '40px' }}>
+
+              <div className="card-hover" style={{ backgroundColor: colors.white, borderRadius: '12px', padding: '24px', border: `1px solid ${colors.border}`, borderTop: `4px solid ${colors.navy}`, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.2s' }}>
+                <div style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em', marginBottom: '12px' }}>VERIFIED RECORDS</div>
+                <div style={{ fontSize: '36px', fontWeight: 700, color: colors.navy, lineHeight: 1 }}>{total}</div>
+                <div style={{ fontSize: '13px', color: colors.textMuted, marginTop: '8px' }}>Safe cryptographic submissions</div>
+              </div>
+
+              <div className="card-hover" style={{ backgroundColor: activeBreachCount > 0 ? colors.dangerBg : colors.white, borderRadius: '12px', padding: '24px', border: `1px solid ${activeBreachCount > 0 ? '#FCA5A5' : colors.border}`, borderTop: `4px solid ${activeBreachCount > 0 ? colors.danger : colors.success}`, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.2s' }}>
+                <div style={{ fontSize: '13px', color: activeBreachCount > 0 ? colors.danger : colors.textMuted, fontWeight: 600, letterSpacing: '0.05em', marginBottom: '12px' }}>SYSTEM INTEGRITY</div>
+                <div style={{ fontSize: '28px', fontWeight: 700, color: activeBreachCount > 0 ? colors.danger : colors.success, display: 'flex', alignItems: 'center', gap: '12px', lineHeight: 1 }}>
+                  {activeBreachCount > 0 ? <><ShieldAlert size={28} /> ISOLATED</> : <><ShieldCheck size={28} /> SECURE</>}
+                </div>
+                <div style={{ fontSize: '13px', color: activeBreachCount > 0 ? '#991B1B' : colors.textMuted, marginTop: '12px', fontWeight: activeBreachCount > 0 ? 600 : 400 }}>
+                  {activeBreachCount > 0 ? `${activeBreachCount} tampered records hidden` : "Ed25519 protection active"}
+                </div>
+              </div>
+
+              <div className="card-hover" style={{ backgroundColor: colors.white, borderRadius: '12px', padding: '24px', border: `1px solid ${colors.border}`, borderTop: `4px solid ${colors.gold}`, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.2s' }}>
+                <div style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em', marginBottom: '12px' }}>AVERAGE RATING</div>
+                <div style={{ fontSize: '36px', fontWeight: 700, color: colors.navy, display: 'flex', alignItems: 'baseline', gap: '4px', lineHeight: 1 }}>
+                  {avgValue.toFixed(2)} <span style={{ fontSize: '16px', color: colors.textMuted, fontWeight: 500 }}>/ 5</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '12px 0 8px 0', color: colors.text, fontSize: '14px', fontWeight: 500 }}>
+                  <Star size={16} color={colors.gold} fill={colors.gold} /> {avgLabel}
+                </div>
+                <div style={{ height: '6px', backgroundColor: '#F1F5F9', borderRadius: '999px', overflow: 'hidden' }}>
+                  <div style={{ width: `${avgPercent}%`, height: '100%', backgroundColor: colors.gold }} />
+                </div>
+              </div>
+
+              <div className="card-hover" style={{ backgroundColor: colors.white, borderRadius: '12px', padding: '24px', border: `1px solid ${colors.border}`, borderTop: `4px solid #3B82F6`, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.2s' }}>
+                <div style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em', marginBottom: '12px' }}>TOP CATEGORY</div>
+                <div style={{ fontSize: '28px', fontWeight: 700, color: colors.navy, marginTop: '8px', lineHeight: 1 }}>{topCategory.name}</div>
+                <div style={{ fontSize: '14px', color: colors.textMuted, marginTop: '12px' }}>Highest rated at <strong>{topCategory.score}/5</strong></div>
+              </div>
+
+            </div>
+
+            {/* Charts Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '24px', marginBottom: '40px' }}>
+
+              <div style={{ backgroundColor: colors.white, borderRadius: '12px', padding: '32px', border: `1px solid ${colors.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', marginBottom: '32px' }}>CATEGORY AVERAGES</h3>
                 {count === 0 ? (
-                  <div style={{ height: '250px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '16px' }}>No safe multi-category records available.</div>
+                  <div style={{ height: '250px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textMuted, fontSize: '15px' }}>No safe records available.</div>
                 ) : (
-                  <div style={{ height: '350px', width: '100%' }}>
+                  <div style={{ height: '300px', width: '100%' }}>
                     <ResponsiveContainer>
                       <BarChart data={barData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 14 }} dy={10} />
-                        <YAxis domain={[0, 5]} axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 14 }} />
-                        <BarTooltip cursor={{ fill: 'rgba(0,0,0,0.02)' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '14px' }} />
-                        <Bar dataKey="score" fill="var(--bg-dark-green)" radius={[6, 6, 0, 0]} barSize={50} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 13, fontWeight: 500 }} dy={10} />
+                        <YAxis domain={[0, 5]} axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 13 }} />
+                        <BarTooltip cursor={{ fill: '#F8FAFC' }} contentStyle={{ borderRadius: '8px', border: `1px solid ${colors.border}`, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontSize: '14px', fontWeight: 500 }} />
+                        <Bar dataKey="score" fill={colors.navy} radius={[4, 4, 0, 0]} barSize={40} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 )}
               </div>
 
-              <div className="card" style={{ padding: '35px' }}>
-                <h3 style={{ fontSize: '16px', textTransform: 'uppercase', color: '#666', marginBottom: '30px', letterSpacing: '0.5px' }}>Score Distribution</h3>
+              <div style={{ backgroundColor: colors.white, borderRadius: '12px', padding: '32px', border: `1px solid ${colors.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', marginBottom: '32px' }}>SCORE DISTRIBUTION</h3>
                 {total === 0 ? (
-                  <div style={{ height: '250px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '16px' }}>No safe records available.</div>
+                  <div style={{ height: '250px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textMuted, fontSize: '15px' }}>No safe records available.</div>
                 ) : (
-                  <div className="admin-grid-pie" style={{ display: 'grid', gridTemplateColumns: '58% 42%', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ height: '320px', width: '100%', position: 'relative' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ height: '260px', width: '100%', position: 'relative' }}>
                       <ResponsiveContainer>
                         <PieChart>
-                          <Pie data={pieData} innerRadius={80} outerRadius={120} paddingAngle={3} dataKey="value" stroke="none">
-                            {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                          <Pie data={pieData} innerRadius={65} outerRadius={100} paddingAngle={4} dataKey="value" stroke="none">
+                            {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}
                           </Pie>
                           <PieTooltip
-                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '14px' }}
+                            contentStyle={{ borderRadius: '8px', border: `1px solid ${colors.border}`, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontSize: '13px', fontWeight: 500 }}
                             formatter={(value, name, payload) => [`${value} (${payload.payload.percentage}%)`, name]}
                           />
                         </PieChart>
                       </ResponsiveContainer>
                       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                        <div style={{ fontSize: '13px', color: '#777', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Responses</div>
-                        <div className="serif" style={{ fontSize: '2rem', color: 'var(--bg-dark-green)', lineHeight: 1.1 }}>{total}</div>
+                        <div style={{ fontSize: '12px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em' }}>TOTAL</div>
+                        <div style={{ fontSize: '32px', fontWeight: 700, color: colors.navy, lineHeight: 1 }}>{total}</div>
                       </div>
                     </div>
 
                     <div>
-                      <div style={{ fontSize: '13px', color: '#666', fontWeight: 600, marginBottom: '12px', textTransform: 'uppercase' }}>Breakdown</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                         {pieData.map((entry, index) => (
-                          <div key={entry.star} style={{ display: 'grid', gridTemplateColumns: '12px 1fr auto auto', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#444' }}>
-                            <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: COLORS[index % COLORS.length], display: 'inline-block' }} />
-                            <span>{entry.star} Star</span>
-                            <span style={{ fontWeight: 600 }}>{entry.value}</span>
-                            <span style={{ color: '#888' }}>{entry.percentage}%</span>
+                          <div key={entry.star} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '13px', color: colors.text }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} />
+                              <span style={{ fontWeight: 500 }}>{entry.star} Star</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <span style={{ fontWeight: 700 }}>{entry.value}</span>
+                              <span style={{ color: colors.textMuted, width: '35px', textAlign: 'right' }}>{entry.percentage}%</span>
+                            </div>
                           </div>
                         ))}
                       </div>
-
-                      <div style={{ marginTop: '18px', padding: '10px 12px', borderRadius: '8px', backgroundColor: 'var(--input-bg)', fontSize: '13px', color: '#555' }}>
-                        Most common rating: <strong>{dominantRating.star} Star</strong>
+                      <div style={{ marginTop: '24px', padding: '12px', borderRadius: '8px', backgroundColor: '#F8FAFC', border: `1px solid ${colors.border}`, fontSize: '13px', color: colors.textMuted }}>
+                        Most common: <strong style={{ color: colors.navy }}>{dominantRating.star} Star</strong>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
+
             </div>
           </div>
         )}
 
         {/* ---------------- VIEW 2: SAFE RECORDS ---------------- */}
         {activeMenu === "records" && (
-          <div className="card animate-in" style={{ minHeight: '80vh', padding: '40px', display: 'flex', flexDirection: 'column' }}>
-            <div className="admin-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
+          <div style={{ animation: 'fadeUp 0.4s ease', backgroundColor: colors.white, borderRadius: '16px', border: `1px solid ${colors.border}`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', minHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+
+            <div style={{ padding: '32px 40px', borderBottom: `1px solid ${colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
               <div>
-                <h1 className="serif" style={{ fontSize: '2.2rem', marginBottom: '10px' }}>Safe Customer Feedback</h1>
-                <p style={{ color: '#666', fontSize: '16px' }}>Only cryptographically verified authentic records are shown here.</p>
+                <h1 style={{ fontSize: '24px', fontWeight: 700, color: colors.navy, margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>Safe Customer Feedback</h1>
+                <p style={{ color: colors.textMuted, fontSize: '15px', margin: 0 }}>Only cryptographically verified authentic records are shown here.</p>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'var(--input-bg)', borderRadius: '10px', padding: '10px 16px', width: '300px', border: '1px solid var(--border-color)' }}>
-                <Search size={18} color="#999" style={{ marginRight: '10px' }} />
-                <input type="text" placeholder="Search verified records..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', fontSize: '14px', margin: 0, padding: 0 }} />
+
+              <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: '8px', padding: '0 16px', height: '42px', width: '320px', border: `1px solid ${colors.border}`, boxSizing: 'border-box' }}>
+                <Search size={18} color={colors.textMuted} style={{ marginRight: '12px', flexShrink: 0 }} />
+                <input type="text" placeholder="Search verified records..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '14px', width: '100%', color: colors.text, padding: 0, margin: 0, height: '100%' }} />
               </div>
             </div>
 
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #eee' }}>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: '#888', width: '8%' }}>ID</th>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: '#888', width: '18%' }}><Clock size={14} style={{ position: 'relative', top: '2px', marginRight: '4px' }} /> TIMESTAMP</th>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: '#888', width: '18%' }}>CUSTOMER</th>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: '#888', width: '34%' }}>FEEDBACK SUMMARY</th>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: '#888', width: '10%' }}>RATING</th>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: '#888', width: '12%', textAlign: 'right' }}>ACTION</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentItems.length === 0 ? (
-                  <tr><td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#999' }}>No safe records found.</td></tr>
-                ) : currentItems.map((f, index) => {
-                  const parsed = parseFeedbackData(f.comment);
-                  const precisionDate = formatPrecisionDate(f.created_at);
-                  return (
-                    <tr key={f.id} className="animate-in" style={{ borderBottom: '1px solid #eee', animationDelay: `${index * 0.05}s` }}>
-                      <td style={{ padding: '24px 12px', color: '#999', fontSize: '14px' }}>#{f.id}</td>
-                      <td style={{ padding: '24px 12px', color: '#666', fontSize: '13px' }}>
-                        <div style={{ fontWeight: 500 }}>{precisionDate.date}</div>
-                        <div style={{ color: '#aaa', fontSize: '12px' }}>{precisionDate.time}</div>
-                      </td>
-                      <td style={{ padding: '24px 12px', fontWeight: 500, fontSize: '15px' }}>{f.customer_name || 'Anonymous'}</td>
-                      
-                      {/* UPDATED: Displays the [PHOTO] badge if an attachment is present */}
-                      <td style={{ padding: '24px 12px', fontSize: '15px', color: '#444' }}>
-                        {parsed.metrics ? <span style={{ color: 'var(--accent-gold)', fontWeight: 600 }}>[Multi-Category Entry]</span> : `"${parsed.text.substring(0, 45)}..."`}
-                        {f.has_attachment && <span style={{fontSize: '11px', color: 'var(--bg-dark-green)', fontWeight: 'bold', marginLeft: '8px'}}>[PHOTO]</span>}
-                      </td>
+            <div style={{ flex: 1, padding: '0 40px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '8%' }}>ID</th>
+                    <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '18%' }}><Clock size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} /> TIMESTAMP</th>
+                    <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '18%' }}>CUSTOMER</th>
+                    <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '34%' }}>FEEDBACK SUMMARY</th>
+                    <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '10%' }}>RATING</th>
+                    <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '12%', textAlign: 'right' }}>ACTION</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentItems.length === 0 ? (
+                    <tr><td colSpan="6" style={{ textAlign: 'center', padding: '60px', color: colors.textMuted }}>No safe records found.</td></tr>
+                  ) : currentItems.map((f, index) => {
+                    const parsed = parseFeedbackData(f.comment);
+                    const precisionDate = formatPrecisionDate(f.created_at);
+                    return (
+                      <tr key={f.id} style={{ borderBottom: `1px solid ${colors.border}`, transition: 'background-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+                        <td style={{ padding: '20px 12px', color: colors.textMuted, fontSize: '14px', fontWeight: 500 }}>#{f.id}</td>
+                        <td style={{ padding: '20px 12px' }}>
+                          <div style={{ color: colors.text, fontSize: '14px', fontWeight: 500 }}>{precisionDate.date}</div>
+                          <div style={{ color: colors.textMuted, fontSize: '13px', marginTop: '2px' }}>{precisionDate.time}</div>
+                        </td>
+                        <td style={{ padding: '20px 12px', color: colors.text, fontSize: '15px', fontWeight: 600 }}>{f.customer_name || 'Anonymous'}</td>
 
-                      <td style={{ padding: '24px 12px', fontWeight: 600, color: 'var(--accent-gold)', fontSize: '15px' }}>{f.rating} / 5</td>
-                      <td style={{ padding: '24px 12px', textAlign: 'right' }}>
-                        <button className="btn-secondary" onClick={() => openModal(f)} style={{ fontSize: '14px', padding: '8px 16px' }}>View Full</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <div style={{ marginTop: 'auto' }}>
+                        <td style={{ padding: '20px 12px', fontSize: '14px', color: colors.textMuted, lineHeight: 1.5 }}>
+                          {parsed.metrics ? <span style={{ color: colors.navy, fontWeight: 600, backgroundColor: '#F1F5F9', padding: '2px 8px', borderRadius: '4px' }}>[Multi-Category Entry]</span> : `"${parsed.text.substring(0, 45)}..."`}
+                          {f.has_attachment && <span style={{ fontSize: '11px', color: colors.success, fontWeight: 700, marginLeft: '8px', border: `1px solid ${colors.success}`, padding: '2px 6px', borderRadius: '4px' }}>[PHOTO]</span>}
+                        </td>
+
+                        <td style={{ padding: '20px 12px', fontWeight: 700, color: colors.navy, fontSize: '15px' }}>{f.rating} <span style={{ color: colors.textMuted, fontWeight: 500 }}>/ 5</span></td>
+                        <td style={{ padding: '20px 12px', textAlign: 'right' }}>
+                          <button onClick={() => openModal(f)} style={{ backgroundColor: colors.white, border: `1px solid ${colors.border}`, color: colors.navy, fontSize: '13px', fontWeight: 600, padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'} onMouseLeave={e => e.currentTarget.style.backgroundColor = colors.white}>View Full</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ padding: '0 40px 24px' }}>
               <PaginationControls />
             </div>
           </div>
@@ -490,100 +570,104 @@ export default function AdminDashboard({ navigate }) {
 
         {/* ---------------- VIEW 3: SECURITY AUDITOR LOGS ---------------- */}
         {activeMenu === "verify" && (
-          <div className="card animate-in" style={{ minHeight: '80vh', padding: '40px', display: 'flex', flexDirection: 'column' }}>
-            <div className="admin-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
+          <div style={{ animation: 'fadeUp 0.4s ease', backgroundColor: colors.white, borderRadius: '16px', border: `1px solid ${colors.border}`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', minHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+
+            <div style={{ padding: '32px 40px', borderBottom: `1px solid ${colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '20px' }}>
               <div>
-                <h1 className="serif" style={{ fontSize: '2.2rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <ShieldCheck size={32} color="var(--bg-dark-green)" /> Cryptographic Audit Logs
+                <h1 style={{ fontSize: '24px', fontWeight: 700, color: colors.navy, margin: '0 0 8px 0', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <ShieldCheck size={28} color={colors.gold} /> Cryptographic Audit Logs
                 </h1>
-                <p style={{ color: '#666', fontSize: '16px' }}>Raw Ed25519 signatures and payloads for database integrity verification.</p>
+                <p style={{ color: colors.textMuted, fontSize: '15px', margin: 0 }}>Raw Ed25519 signatures and payloads for database integrity verification.</p>
               </div>
 
-              <div style={{ display: 'flex', gap: '15px' }}>
-                <button onClick={exportToCSV} className="btn-secondary" style={{ padding: '14px 20px', borderRadius: '10px', fontSize: '15px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'white' }}>
-                  <Download size={20} /> Export CSV
-                </button>
-                <button onClick={runSystemAudit} disabled={isAuditing} style={{ backgroundColor: 'var(--bg-dark-green)', color: 'white', border: 'none', padding: '14px 28px', borderRadius: '10px', fontSize: '15px', fontWeight: 500, cursor: isAuditing ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: '0.2s' }}>
-                  {isAuditing ? <ShieldAlert size={20} /> : <ShieldCheck size={20} />}
-                  {isAuditing ? "Auditing System..." : "Run Global Audit"}
-                </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'flex-end' }}>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button onClick={exportToCSV} style={{ backgroundColor: colors.white, border: `1px solid ${colors.border}`, color: colors.text, padding: '10px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'} onMouseLeave={e => e.currentTarget.style.backgroundColor = colors.white}>
+                    <Download size={18} /> Export CSV
+                  </button>
+                  <button onClick={runSystemAudit} disabled={isAuditing} style={{ backgroundColor: colors.navy, color: colors.white, border: 'none', padding: '10px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', opacity: isAuditing ? 0.8 : 1, transition: 'background-color 0.2s' }} onMouseEnter={e => { if (!isAuditing) e.currentTarget.style.backgroundColor = '#17365C' }} onMouseLeave={e => { if (!isAuditing) e.currentTarget.style.backgroundColor = colors.navy }}>
+                    {isAuditing ? <ShieldAlert size={18} /> : <ShieldCheck size={18} />}
+                    {isAuditing ? "Auditing System..." : "Run Global Audit"}
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: '8px', padding: '0 16px', height: '42px', width: '320px', border: `1px solid ${colors.border}`, boxSizing: 'border-box' }}>
+                  <Search size={18} color={colors.textMuted} style={{ marginRight: '12px', flexShrink: 0 }} />
+                  <input type="text" placeholder="Search all logs..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '14px', width: '100%', color: colors.text, padding: 0, margin: 0, height: '100%' }} />
+                </div>
               </div>
             </div>
 
-            <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'flex-end' }}>
-              <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'var(--input-bg)', borderRadius: '10px', padding: '10px 16px', width: '300px', border: '1px solid var(--border-color)' }}>
-                <Search size={18} color="#999" style={{ marginRight: '10px' }} />
-                <input type="text" placeholder="Search all logs..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', fontSize: '14px', margin: 0, padding: 0 }} />
-              </div>
-            </div>
+            <div style={{ flex: 1, padding: '24px 40px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: '16px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '6%' }}>ID</th>
+                    <th style={{ padding: '16px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '14%' }}><Clock size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} /> TIMESTAMP</th>
+                    <th style={{ padding: '16px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '20%' }}><Hash size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} /> SIGNATURE</th>
+                    <th style={{ padding: '16px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '16%' }}><Key size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} /> PUBLIC KEY</th>
+                    <th style={{ padding: '16px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '16%', textAlign: 'center' }}>INTEGRITY STATUS</th>
+                    <th style={{ padding: '16px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '28%', textAlign: 'right' }}>ACTION</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentItems.length === 0 ? (
+                    <tr><td colSpan="6" style={{ textAlign: 'center', padding: '60px', color: colors.textMuted }}>No logs found.</td></tr>
+                  ) : currentItems.map((f, index) => {
+                    const precisionDate = formatPrecisionDate(f.created_at);
+                    const isInvalid = verifyState[f.id]?.status === 'invalid';
+                    return (
+                      <tr key={f.id} style={{ borderBottom: `1px solid ${colors.border}`, backgroundColor: isInvalid ? colors.dangerBg : 'transparent', transition: 'background-color 0.2s' }} onMouseEnter={e => { if (!isInvalid) e.currentTarget.style.backgroundColor = '#F8FAFC' }} onMouseLeave={e => { if (!isInvalid) e.currentTarget.style.backgroundColor = 'transparent' }}>
+                        <td style={{ padding: '20px 12px', color: isInvalid ? colors.danger : colors.textMuted, fontSize: '14px', fontWeight: 500 }}>#{f.id}</td>
+                        <td style={{ padding: '20px 12px' }}>
+                          <div style={{ color: colors.text, fontSize: '13px', fontWeight: 500 }}>{precisionDate.date}</div>
+                          <div style={{ color: colors.textMuted, fontSize: '12px', marginTop: '2px' }}>{precisionDate.time}</div>
+                        </td>
+                        <td style={{ padding: '20px 12px', fontFamily: 'monospace', fontSize: '13px', color: colors.textMuted }} title={f.signature}>
+                          {f.signature ? `${f.signature.substring(0, 20)}...` : 'N/A'}
+                        </td>
+                        <td style={{ padding: '20px 12px', fontFamily: 'monospace', fontSize: '13px', color: colors.textMuted }} title={f.public_key}>
+                          {f.public_key ? `${f.public_key.substring(0, 16)}...` : 'N/A'}
+                        </td>
 
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #eee' }}>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: '#888', width: '7%' }}>ID</th>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: '#888', width: '14%' }}><Clock size={14} style={{ position: 'relative', top: '2px', marginRight: '4px' }} /> TIMESTAMP</th>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: '#888', width: '25%' }}><Hash size={14} style={{ position: 'relative', top: '2px', marginRight: '4px' }} /> SIGNATURE (HEX)</th>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: '#888', width: '22%' }}><Key size={14} style={{ position: 'relative', top: '2px', marginRight: '4px' }} /> PUBLIC KEY</th>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: '#888', width: '18%', textAlign: 'center' }}>INTEGRITY STATUS</th>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: '#888', width: '14%', textAlign: 'right' }}>ACTION</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentItems.length === 0 ? (
-                  <tr><td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#999' }}>No logs found.</td></tr>
-                ) : currentItems.map((f, index) => {
-                  const precisionDate = formatPrecisionDate(f.created_at);
-                  return (
-                    <tr key={f.id} className="animate-in" style={{ borderBottom: '1px solid #eee', animationDelay: `${index * 0.05}s`, backgroundColor: verifyState[f.id]?.status === 'invalid' ? 'var(--danger-bg)' : 'transparent' }}>
-                      <td style={{ padding: '24px 12px', color: '#999', fontSize: '15px' }}>#{f.id}</td>
-                      <td style={{ padding: '24px 12px', color: '#666', fontSize: '13px' }}>
-                        <div style={{ fontWeight: 500 }}>{precisionDate.date}</div>
-                        <div style={{ color: '#aaa', fontSize: '12px' }}>{precisionDate.time}</div>
-                      </td>
-                      <td style={{ padding: '24px 12px', fontFamily: 'monospace', fontSize: '14px', color: '#444' }} title={f.signature}>
-                        {f.signature ? `${f.signature.substring(0, 20)}...` : 'N/A'}
-                      </td>
-                      <td style={{ padding: '24px 12px', fontFamily: 'monospace', fontSize: '14px', color: '#444' }} title={f.public_key}>
-                        {f.public_key ? `${f.public_key.substring(0, 16)}...` : 'N/A'}
-                      </td>
-                      
-                      <td style={{ padding: '24px 12px', textAlign: 'center' }}>
-                        {!verifyState[f.id]?.status && <span style={{ fontSize: '14px', color: '#999' }}>Pending check</span>}
-                        {verifyState[f.id]?.status === 'checking' && <span className="badge badge-checking" style={{ fontSize: '13px', padding: '8px 14px' }}>Verifying...</span>}
-                        {verifyState[f.id]?.status === 'valid' && <span className="badge badge-valid" style={{ fontSize: '13px', padding: '8px 14px' }}>✓ Valid Signature</span>}
-                        {verifyState[f.id]?.status === 'invalid' && (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                            <span className="badge badge-invalid" style={{ fontSize: '13px', padding: '8px 14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                              <AlertTriangle size={14} /> TAMPERED
-                            </span>
-                            {verifyState[f.id]?.tamperTime && <span style={{ fontSize: '11px', color: '#FF8A80', marginTop: '4px' }}>Detected: {verifyState[f.id].tamperTime}</span>}
-                          </div>
-                        )}
-                      </td>
-                      
-                      <td style={{ padding: '24px 12px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', alignItems: 'center' }}>
-                          <button className="btn-secondary" onClick={() => runDetailedTrace(f)} style={{ fontSize: '13px', padding: '8px 14px', backgroundColor: 'var(--bg-dark-green)', color: 'white', border: 'none' }} title="Run Terminal Audit">
-                            <Terminal size={14} style={{ display: 'inline', position: 'relative', top: '2px', marginRight: '4px' }} /> Audit
-                          </button>
+                        <td style={{ padding: '20px 12px', textAlign: 'center' }}>
+                          {!verifyState[f.id]?.status && <span style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 500 }}>Pending check</span>}
+                          {verifyState[f.id]?.status === 'checking' && <span style={{ fontSize: '12px', fontWeight: 600, backgroundColor: '#FEF3C7', color: '#D97706', padding: '6px 12px', borderRadius: '20px', border: '1px solid #FDE68A' }}>Verifying...</span>}
+                          {verifyState[f.id]?.status === 'valid' && <span style={{ fontSize: '12px', fontWeight: 600, backgroundColor: colors.successBg, color: colors.success, padding: '6px 12px', borderRadius: '20px', border: '1px solid #A7F3D0' }}>✓ Valid Signature</span>}
+                          {verifyState[f.id]?.status === 'invalid' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontSize: '12px', fontWeight: 600, backgroundColor: colors.danger, color: colors.white, padding: '6px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <AlertTriangle size={14} /> TAMPERED
+                              </span>
+                              {verifyState[f.id]?.tamperTime && <span style={{ fontSize: '11px', color: '#991B1B', fontWeight: 600 }}>Detected: {verifyState[f.id].tamperTime}</span>}
+                            </div>
+                          )}
+                        </td>
 
-                          {verifyState[f.id]?.status === 'invalid' && !f.is_quarantined && (
-                            <button onClick={() => handleQuarantineRecord(f.id)} className="animate-in" style={{ backgroundColor: '#ff8a80', color: '#000', border: 'none', padding: '8px 10px', borderRadius: '8px', cursor: 'pointer', transition: '0.2s' }} title="Move to Quarantine">
-                              <ShieldAlert size={16} /> Quarantine
+                        <td style={{ padding: '20px 12px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                            <button onClick={() => runDetailedTrace(f)} style={{ fontSize: '13px', fontWeight: 600, padding: '8px 14px', backgroundColor: colors.navy, color: colors.white, border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'background-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#17365C'} onMouseLeave={e => e.currentTarget.style.backgroundColor = colors.navy}>
+                              <Terminal size={14} /> Audit
                             </button>
-                          )}
-                          
-                          {f.is_quarantined && (
-                            <span style={{ fontSize: '12px', color: 'var(--danger)', fontWeight: 'bold' }}>QUARANTINED</span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-            <div style={{ marginTop: 'auto' }}>
+
+                            {isInvalid && !f.is_quarantined && (
+                              <button onClick={() => handleQuarantineRecord(f.id)} style={{ backgroundColor: colors.danger, color: colors.white, border: 'none', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700 }}>
+                                <ShieldAlert size={14} /> Quarantine
+                              </button>
+                            )}
+
+                            {f.is_quarantined && (
+                              <span style={{ fontSize: '11px', color: colors.danger, fontWeight: 800, padding: '6px 8px', border: `1px solid ${colors.danger}`, borderRadius: '4px' }}>QUARANTINED</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ padding: '0 40px 24px' }}>
               <PaginationControls />
             </div>
           </div>
@@ -591,64 +675,67 @@ export default function AdminDashboard({ navigate }) {
 
         {/* ---------------- VIEW 4: THE QUARANTINE ZONE ---------------- */}
         {activeMenu === "quarantine" && (
-          <div className="card animate-in" style={{ minHeight: '80vh', padding: '40px', display: 'flex', flexDirection: 'column', border: '1px solid var(--danger)' }}>
-            <div className="admin-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
+          <div style={{ animation: 'fadeUp 0.4s ease', backgroundColor: colors.white, borderRadius: '16px', border: `1px solid ${colors.danger}`, boxShadow: '0 10px 25px rgba(239, 68, 68, 0.1)', minHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+
+            <div style={{ padding: '32px 40px', borderBottom: `1px solid ${colors.dangerBg}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px', backgroundColor: colors.dangerBg, borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
               <div>
-                <h1 className="serif" style={{ fontSize: '2.2rem', marginBottom: '10px', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <ShieldAlert size={32} /> Quarantine Zone
+                <h1 style={{ fontSize: '24px', fontWeight: 700, color: colors.danger, margin: '0 0 8px 0', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <ShieldAlert size={28} /> Quarantine Zone
                 </h1>
-                <p style={{ color: '#666', fontSize: '16px' }}>Isolated records detected with tampered signatures. These are hidden from your metrics.</p>
+                <p style={{ color: '#991B1B', fontSize: '15px', margin: 0 }}>Isolated records detected with tampered signatures. These are hidden from your metrics.</p>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'var(--danger-bg)', borderRadius: '10px', padding: '10px 16px', width: '300px', border: '1px solid #ffcdd2' }}>
-                <Search size={18} color="var(--danger)" style={{ marginRight: '10px' }} />
-                <input type="text" placeholder="Search quarantined..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', fontSize: '14px', margin: 0, padding: 0, color: 'var(--danger)' }} />
+
+              <div style={{ display: 'flex', alignItems: 'center', backgroundColor: colors.white, borderRadius: '8px', padding: '0 16px', height: '42px', width: '320px', border: `1px solid #FCA5A5`, boxSizing: 'border-box' }}>
+                <Search size={18} color={colors.danger} style={{ marginRight: '12px', flexShrink: 0 }} />
+                <input type="text" placeholder="Search quarantined..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '14px', width: '100%', color: colors.danger, padding: 0, margin: 0, height: '100%' }} />
               </div>
             </div>
 
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #ffcdd2' }}>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: 'var(--danger)', width: '8%' }}>ID</th>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: 'var(--danger)', width: '18%' }}><Clock size={14} style={{ position: 'relative', top: '2px', marginRight: '4px' }} /> TIMESTAMP</th>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: 'var(--danger)', width: '18%' }}>CUSTOMER</th>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: 'var(--danger)', width: '34%' }}>TAMPERED PAYLOAD</th>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: 'var(--danger)', width: '10%' }}>RATING</th>
-                  <th style={{ padding: '16px 12px', fontSize: '14px', color: 'var(--danger)', width: '12%', textAlign: 'right' }}>DANGER</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentItems.length === 0 ? (
-                  <tr><td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#999' }}>No records in quarantine.</td></tr>
-                ) : currentItems.map((f, index) => {
-                  const parsed = parseFeedbackData(f.comment);
-                  const precisionDate = formatPrecisionDate(f.created_at);
-                  return (
-                    <tr key={f.id} className="animate-in" style={{ borderBottom: '1px solid #ffebee', animationDelay: `${index * 0.05}s`, backgroundColor: 'var(--danger-bg)' }}>
-                      <td style={{ padding: '24px 12px', color: 'var(--danger)', fontSize: '14px', fontWeight: 'bold' }}>#{f.id}</td>
-                      <td style={{ padding: '24px 12px', color: '#666', fontSize: '13px' }}>
-                        <div style={{ fontWeight: 500 }}>{precisionDate.date}</div>
-                        <div style={{ color: '#aaa', fontSize: '12px' }}>{precisionDate.time}</div>
-                      </td>
-                      <td style={{ padding: '24px 12px', fontWeight: 500, fontSize: '15px' }}>{f.customer_name || 'Anonymous'}</td>
-                      
-                      {/* UPDATED: Displays the [PHOTO] badge if an attachment is present */}
-                      <td style={{ padding: '24px 12px', fontSize: '15px', color: '#444' }}>
-                        {parsed.metrics ? <span style={{ color: 'var(--accent-gold)', fontWeight: 600 }}>[Multi-Category Entry]</span> : `"${parsed.text.substring(0, 45)}..."`}
-                        {f.has_attachment && <span style={{fontSize: '11px', color: 'var(--danger)', fontWeight: 'bold', marginLeft: '8px'}}>[PHOTO]</span>}
-                      </td>
+            <div style={{ flex: 1, padding: '0 40px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 700, color: colors.danger, letterSpacing: '0.05em', borderBottom: `2px solid #FCA5A5`, width: '8%' }}>ID</th>
+                    <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 700, color: colors.danger, letterSpacing: '0.05em', borderBottom: `2px solid #FCA5A5`, width: '18%' }}><Clock size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} /> TIMESTAMP</th>
+                    <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 700, color: colors.danger, letterSpacing: '0.05em', borderBottom: `2px solid #FCA5A5`, width: '18%' }}>CUSTOMER</th>
+                    <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 700, color: colors.danger, letterSpacing: '0.05em', borderBottom: `2px solid #FCA5A5`, width: '34%' }}>TAMPERED PAYLOAD</th>
+                    <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 700, color: colors.danger, letterSpacing: '0.05em', borderBottom: `2px solid #FCA5A5`, width: '10%' }}>RATING</th>
+                    <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 700, color: colors.danger, letterSpacing: '0.05em', borderBottom: `2px solid #FCA5A5`, width: '12%', textAlign: 'right' }}>ACTION</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentItems.length === 0 ? (
+                    <tr><td colSpan="6" style={{ textAlign: 'center', padding: '60px', color: colors.textMuted }}>No records in quarantine.</td></tr>
+                  ) : currentItems.map((f, index) => {
+                    const parsed = parseFeedbackData(f.comment);
+                    const precisionDate = formatPrecisionDate(f.created_at);
+                    return (
+                      <tr key={f.id} style={{ borderBottom: `1px solid #FEE2E2` }}>
+                        <td style={{ padding: '20px 12px', color: colors.danger, fontSize: '14px', fontWeight: 700 }}>#{f.id}</td>
+                        <td style={{ padding: '20px 12px' }}>
+                          <div style={{ color: colors.text, fontSize: '14px', fontWeight: 500 }}>{precisionDate.date}</div>
+                          <div style={{ color: colors.textMuted, fontSize: '13px', marginTop: '2px' }}>{precisionDate.time}</div>
+                        </td>
+                        <td style={{ padding: '20px 12px', color: colors.text, fontSize: '15px', fontWeight: 600 }}>{f.customer_name || 'Anonymous'}</td>
 
-                      <td style={{ padding: '24px 12px', fontWeight: 600, color: 'var(--danger)', fontSize: '15px' }}>{f.rating} / 5</td>
-                      <td style={{ padding: '24px 12px', textAlign: 'right' }}>
-                        <button onClick={() => handlePurgeRecord(f.id)} style={{ backgroundColor: 'var(--danger)', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
-                          <Trash2 size={14} /> Delete
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <div style={{ marginTop: 'auto' }}>
+                        <td style={{ padding: '20px 12px', fontSize: '14px', color: colors.textMuted, lineHeight: 1.5 }}>
+                          {parsed.metrics ? <span style={{ color: '#991B1B', fontWeight: 600, backgroundColor: '#FEE2E2', padding: '2px 8px', borderRadius: '4px' }}>[Multi-Category Entry]</span> : `"${parsed.text.substring(0, 45)}..."`}
+                          {f.has_attachment && <span style={{ fontSize: '11px', color: colors.danger, fontWeight: 700, marginLeft: '8px', border: `1px solid ${colors.danger}`, padding: '2px 6px', borderRadius: '4px' }}>[PHOTO]</span>}
+                        </td>
+
+                        <td style={{ padding: '20px 12px', fontWeight: 700, color: colors.danger, fontSize: '15px' }}>{f.rating} <span style={{ color: '#F87171', fontWeight: 500 }}>/ 5</span></td>
+                        <td style={{ padding: '20px 12px', textAlign: 'right' }}>
+                          <button onClick={() => handlePurgeRecord(f.id)} style={{ backgroundColor: colors.danger, color: colors.white, border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, marginLeft: 'auto', transition: 'background-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#B91C1C'} onMouseLeave={e => e.currentTarget.style.backgroundColor = colors.danger}>
+                            <Trash2 size={16} /> Delete
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ padding: '0 40px 24px' }}>
               <PaginationControls />
             </div>
           </div>
@@ -656,61 +743,72 @@ export default function AdminDashboard({ navigate }) {
 
       </div>
 
-      {/* ---------------- 1. VIEW FEEDBACK MODAL (For Manager) ---------------- */}
+      {/* ---------------- 1. VIEW FEEDBACK MODAL (Modernized) ---------------- */}
       {selectedFeedback && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(10, 27, 63, 0.5)', backdropFilter: 'blur(6px)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <div className="card animate-in modal-content" style={{ width: '90%', maxWidth: '550px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', padding: '45px' }}>
-            <button onClick={() => setSelectedFeedback(null)} style={{ position: 'absolute', top: '25px', right: '25px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#999' }}><X size={28} /></button>
-            <h2 className="serif" style={{ fontSize: '2rem', color: 'var(--bg-dark-green)', marginBottom: '8px' }}>Feedback Report</h2>
-            <p style={{ fontSize: '14px', color: '#888', marginBottom: '35px' }}>ID #{selectedFeedback.id} • Submitted via EdDSA Portal</p>
-            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '18px', marginBottom: '18px' }}>
-              <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>CUSTOMER NAME</span>
-              <span style={{ fontWeight: 600, color: 'var(--text-dark)', fontSize: '16px' }}>{selectedFeedback.customer_name || 'Anonymous'}</span>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div style={{ width: '100%', maxWidth: '550px', maxHeight: '90vh', overflowY: 'auto', backgroundColor: colors.white, borderRadius: '16px', padding: '40px', position: 'relative', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', animation: 'fadeUp 0.3s ease' }}>
+            <button onClick={() => setSelectedFeedback(null)} style={{ position: 'absolute', top: '24px', right: '24px', background: 'transparent', border: 'none', cursor: 'pointer', color: colors.textMuted, transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = colors.navy} onMouseLeave={e => e.currentTarget.style.color = colors.textMuted}><X size={24} /></button>
+
+            <h2 style={{ fontSize: '24px', fontWeight: 700, color: colors.navy, margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>Feedback Report</h2>
+            <p style={{ fontSize: '14px', color: colors.textMuted, margin: '0 0 32px 0' }}>ID #{selectedFeedback.id} • Submitted via EdDSA Portal</p>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${colors.border}`, paddingBottom: '16px', marginBottom: '16px' }}>
+              <span style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em' }}>CUSTOMER NAME</span>
+              <span style={{ fontWeight: 600, color: colors.text, fontSize: '15px' }}>{selectedFeedback.customer_name || 'Anonymous'}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '18px', marginBottom: '25px' }}>
-              <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>OVERALL RATING</span>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${colors.border}`, paddingBottom: '16px', marginBottom: '24px' }}>
+              <span style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em' }}>OVERALL RATING</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontWeight: 700, color: 'var(--accent-gold)', fontSize: '20px' }}>{selectedFeedback.rating} / 5</span>
-                <Star size={18} fill="var(--accent-gold)" color="var(--accent-gold)" />
+                <span style={{ fontWeight: 700, color: colors.navy, fontSize: '20px' }}>{selectedFeedback.rating} / 5</span>
+                <Star size={18} fill={colors.gold} color={colors.gold} />
               </div>
             </div>
-            <div style={{ marginBottom: '25px' }}>
-              <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '12px' }}>CATEGORY BREAKDOWN</span>
+
+            <div style={{ marginBottom: '24px' }}>
+              <span style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 600, display: 'block', marginBottom: '12px', letterSpacing: '0.05em' }}>CATEGORY BREAKDOWN</span>
               {parseFeedbackData(selectedFeedback.comment).metrics ? (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                   {Object.entries(parseFeedbackData(selectedFeedback.comment).metrics).map(([cat, val]) => (
-                    <div key={cat} style={{ fontSize: '14px', backgroundColor: 'var(--input-bg)', padding: '8px 16px', borderRadius: '25px', border: '1px solid var(--border-color)' }}>{cat}: <strong style={{ color: 'var(--accent-gold)' }}>{val}/5</strong></div>
+                    <div key={cat} style={{ fontSize: '13px', backgroundColor: '#F8FAFC', padding: '8px 16px', borderRadius: '20px', border: `1px solid ${colors.border}`, fontWeight: 500, color: colors.text }}>
+                      {cat}: <strong style={{ color: colors.navy }}>{val}</strong>
+                    </div>
                   ))}
                 </div>
               ) : (
-                <div style={{ fontSize: '14px', color: '#999', fontStyle: 'italic', padding: '12px', backgroundColor: '#f9f9f9', borderRadius: '8px', border: '1px solid #eee' }}>Legacy feedback. No multi-category data available.</div>
+                <div style={{ fontSize: '14px', color: colors.textMuted, fontStyle: 'italic', padding: '16px', backgroundColor: '#F8FAFC', borderRadius: '8px', border: `1px solid ${colors.border}` }}>Legacy feedback. No detailed breakdown available.</div>
               )}
             </div>
-            <div style={{ marginBottom: '25px' }}>
-              <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '12px' }}>WRITTEN COMMENT</span>
-              <div style={{ padding: '20px', backgroundColor: '#f9f9f9', borderRadius: '12px', fontSize: '16px', color: '#333', fontStyle: 'italic', border: '1px solid #eee', lineHeight: '1.5' }}>"{parseFeedbackData(selectedFeedback.comment).text}"</div>
+
+            <div style={{ marginBottom: '32px' }}>
+              <span style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 600, display: 'block', marginBottom: '12px', letterSpacing: '0.05em' }}>WRITTEN COMMENT</span>
+              <div style={{ padding: '20px', backgroundColor: '#F8FAFC', borderRadius: '12px', fontSize: '15px', color: colors.text, fontStyle: 'italic', border: `1px solid ${colors.border}`, lineHeight: '1.6' }}>
+                "{parseFeedbackData(selectedFeedback.comment).text}"
+              </div>
             </div>
-            
-            {/* NEW ATTACHMENT SECTION */}
+
+            {/* EVIDENCE DISPLAY SECTION */}
             {selectedFeedback.has_attachment && !selectedFeedback.attachment && (
-              <div style={{ color: '#888', fontStyle: 'italic', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Clock size={14} /> Loading high-res evidence data from server...
+              <div style={{ color: colors.textMuted, fontStyle: 'italic', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#F8FAFC', padding: '12px', borderRadius: '8px' }}>
+                <Loader2 size={14} style={{ animation: 'spin 1s infinite' }} /> Fetching high-res evidence data from secure vault...
               </div>
             )}
+
             {selectedFeedback.attachment && (
-              <div>
-                <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+              <div style={{ animation: 'fadeUp 0.4s ease' }}>
+                <span style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', letterSpacing: '0.05em' }}>
                   <Camera size={14} /> EVIDENCE ATTACHMENT
                 </span>
-                <div 
+                <div
                   onClick={() => setFullScreenImage(selectedFeedback.attachment)}
                   title="Click to view full size"
-                  style={{ padding: '10px', backgroundColor: '#f9f9f9', borderRadius: '12px', border: '1px solid #eee', display: 'flex', justifyContent: 'center', cursor: 'zoom-in', transition: '0.2s' }}
-                  onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-gold)'}
-                  onMouseLeave={(e) => e.currentTarget.style.borderColor = '#eee'}
+                  style={{ padding: '8px', backgroundColor: colors.white, borderRadius: '12px', border: `1px solid ${colors.border}`, display: 'flex', justifyContent: 'center', cursor: 'zoom-in', transition: 'border 0.2s' }}
+                  onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.navy}
+                  onMouseLeave={(e) => e.currentTarget.style.borderColor = colors.border}
                 >
                   <img src={selectedFeedback.attachment} alt="Evidence" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px', objectFit: 'contain' }} />
                 </div>
+                <div style={{ textAlign: 'center', fontSize: '12px', color: colors.textMuted, marginTop: '12px', fontWeight: 500 }}>Click image to enlarge</div>
               </div>
             )}
           </div>
@@ -719,62 +817,62 @@ export default function AdminDashboard({ navigate }) {
 
       {/* ---------------- 1.B FULL SCREEN IMAGE VIEWER ---------------- */}
       {fullScreenImage && (
-        <div 
+        <div
           onClick={() => setFullScreenImage(null)}
-          style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'zoom-out' }}
+          style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15, 23, 42, 0.95)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'zoom-out' }}
         >
-          <button style={{ position: 'absolute', top: '25px', right: '35px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'white' }}><X size={36} /></button>
-          <img src={fullScreenImage} alt="Full Screen Evidence" style={{ maxWidth: '90%', maxHeight: '90vh', objectFit: 'contain', outline: '4px solid white', borderRadius: '4px' }} />
+          <button style={{ position: 'absolute', top: '32px', right: '40px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'white' }}><X size={40} /></button>
+          <img src={fullScreenImage} alt="Full Screen Evidence" style={{ maxWidth: '90%', maxHeight: '90vh', objectFit: 'contain', outline: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }} />
         </div>
       )}
 
-      {/* ---------------- 2. CYBER TERMINAL MODAL (For Auditor) ---------------- */}
+      {/* ---------------- 2. CYBER TERMINAL MODAL (Kept Dark/Hacker style) ---------------- */}
       {traceModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(5, 13, 33, 0.85)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <div className="animate-in modal-content" style={{ width: '90%', maxWidth: '700px', backgroundColor: '#0a0a0a', border: '1px solid #333', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', fontFamily: 'monospace' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div style={{ width: '100%', maxWidth: '700px', backgroundColor: '#020617', border: '1px solid #1E293B', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 25px 50px rgba(0,0,0,0.5)', animation: 'fadeUp 0.3s ease' }}>
 
-            <div style={{ backgroundColor: '#1a1a1a', padding: '12px 20px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ color: '#888', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Terminal size={16} /> Ed25519 VERIFICATION TRACE // TASK_ID: {traceModal.id}
+            <div style={{ backgroundColor: '#0F172A', padding: '16px 24px', borderBottom: '1px solid #1E293B', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ color: '#94A3B8', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 600, letterSpacing: '0.05em' }}>
+                <Terminal size={16} color={colors.gold} /> Ed25519 VERIFICATION TRACE // TASK_ID: {traceModal.id}
               </div>
-              <button onClick={() => setTraceModal(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#666' }}><X size={20} /></button>
+              <button onClick={() => setTraceModal(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748B', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = '#64748B'}><X size={20} /></button>
             </div>
 
-            <div style={{ padding: '30px', color: '#00ff00', fontSize: '14px', lineHeight: '1.6' }}>
-              <div style={{ color: '#aaa', marginBottom: '20px' }}>&gt; Initializing audit protocol...</div>
-              <div style={{ marginBottom: '15px' }}>
-                <span style={{ color: '#fff' }}>[1] Target Payload Extracted:</span><br />
-                <span style={{ color: '#888' }}>&#123; customer_name: "{traceModal.customer_name}", rating: {traceModal.rating}, comment: "{traceModal.comment.substring(0, 30)}..." &#125;</span>
+            <div style={{ padding: '32px', color: '#10B981', fontSize: '14px', lineHeight: '1.6', fontFamily: 'monospace' }}>
+              <div style={{ color: '#64748B', marginBottom: '24px' }}>&gt; Initializing audit protocol...</div>
+              <div style={{ marginBottom: '20px' }}>
+                <span style={{ color: '#F8FAFC', fontWeight: 'bold' }}>[1] Target Payload Extracted:</span><br />
+                <span style={{ color: '#94A3B8' }}>&#123; customer_name: "{traceModal.customer_name}", rating: {traceModal.rating}, comment: "{traceModal.comment.substring(0, 30)}..." &#125;</span>
               </div>
-              <div style={{ marginBottom: '15px' }}>
-                <span style={{ color: '#fff' }}>[2] Retrieving EdDSA Public Key:</span><br />
-                <span style={{ color: '#888' }}>{traceModal.public_key}</span>
+              <div style={{ marginBottom: '20px' }}>
+                <span style={{ color: '#F8FAFC', fontWeight: 'bold' }}>[2] Retrieving EdDSA Public Key:</span><br />
+                <span style={{ color: '#94A3B8', wordBreak: 'break-all' }}>{traceModal.public_key}</span>
               </div>
-              <div style={{ marginBottom: '25px' }}>
-                <span style={{ color: '#fff' }}>[3] Comparing computed hash against provided signature...</span><br />
-                <span style={{ color: '#888' }}>Expected: {traceModal.signature ? `${traceModal.signature.substring(0, 64)}...` : 'NULL'}</span>
+              <div style={{ marginBottom: '32px' }}>
+                <span style={{ color: '#F8FAFC', fontWeight: 'bold' }}>[3] Comparing computed hash against provided signature...</span><br />
+                <span style={{ color: '#94A3B8', wordBreak: 'break-all' }}>Expected: {traceModal.signature ? `${traceModal.signature.substring(0, 64)}...` : 'NULL'}</span>
               </div>
 
               {traceStatus === 'loading' && (
-                <div style={{ color: '#00ff00', animation: 'blink 1s infinite' }}>&gt; Validating elliptic curve constraints...</div>
+                <div style={{ color: '#10B981', animation: 'blink 1s infinite' }}>&gt; Validating elliptic curve constraints...</div>
               )}
 
               {traceStatus === 'pass' && (
-                <div className="animate-in" style={{ backgroundColor: 'rgba(0, 255, 0, 0.1)', borderLeft: '4px solid #00ff00', padding: '15px', marginTop: '20px', color: '#00ff00' }}>
-                  <div style={{ fontWeight: 'bold', fontSize: '18px', marginBottom: '5px' }}>[OK] SIGNATURE VERIFIED</div>
+                <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', borderLeft: '4px solid #10B981', padding: '20px', marginTop: '24px', color: '#10B981', animation: 'fadeUp 0.3s ease' }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '18px', marginBottom: '8px' }}>[OK] SIGNATURE VERIFIED</div>
                   Data integrity mathematically proven. No tampering detected.
                 </div>
               )}
 
               {traceStatus === 'fail' && (
-                <div className="animate-in" style={{ backgroundColor: 'rgba(255, 0, 0, 0.1)', borderLeft: '4px solid #ff0000', padding: '15px', marginTop: '20px', color: '#ff0000' }}>
-                  <div style={{ fontWeight: 'bold', fontSize: '18px', marginBottom: '5px', display: 'flex', alignItems: 'center', gap: '10px' }}><AlertTriangle size={20} /> [FATAL ERROR] HASH MISMATCH</div>
+                <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderLeft: '4px solid #EF4444', padding: '20px', marginTop: '24px', color: '#EF4444', animation: 'fadeUp 0.3s ease' }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '18px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}><AlertTriangle size={20} /> [FATAL ERROR] HASH MISMATCH</div>
                   Computed payload hash does not match the Ed25519 signature. Data has been altered post-submission.
                 </div>
               )}
 
               {traceStatus !== 'loading' && (
-                <button onClick={() => setTraceModal(null)} style={{ marginTop: '30px', backgroundColor: 'transparent', color: '#888', border: '1px solid #555', padding: '8px 16px', cursor: 'pointer', fontFamily: 'monospace' }}>
+                <button onClick={() => setTraceModal(null)} style={{ marginTop: '40px', backgroundColor: 'transparent', color: '#94A3B8', border: '1px solid #334155', padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontFamily: 'monospace', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#1E293B'; e.currentTarget.style.color = '#fff' }} onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94A3B8' }}>
                   &gt; EXIT_TRACE
                 </button>
               )}
