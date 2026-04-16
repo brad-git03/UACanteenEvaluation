@@ -59,7 +59,7 @@ export default function FeedbackForm({ navigate }) {
       } catch (err) {
         console.error("Failed to fetch stalls from DB:", err);
         setAvailableStalls([]);
-        setSelectedStall("General Feedback"); // Fallback if DB fetch fails
+        setSelectedStall("General Feedback");
       } finally {
         setLoadingStalls(false);
       }
