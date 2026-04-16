@@ -201,7 +201,6 @@ export default function Login({ navigate }) {
                   <select value={role} onChange={(e) => setRole(e.target.value)} style={{ width: '100%', padding: '14px 16px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '15px', outline: 'none', backgroundColor: colors.white, boxSizing: 'border-box', fontFamily: 'inherit' }}>
                     <option value="student">Student</option>
                     <option value="staff">Staff / Faculty</option>
-                    <option value="admin">System Administrator</option>
                   </select>
                 </div>
               </>

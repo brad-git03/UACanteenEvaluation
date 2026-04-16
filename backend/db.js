@@ -2,9 +2,9 @@ const { Pool } = require('pg');
 
 // Works for both local testing and Render deployments
 const pool = new Pool(
-    process.env.DATABASE_URL 
-    ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }
-    : {}
+    process.env.DATABASE_URL
+        ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }
+        : {}
 );
 
 async function initDB() {
@@ -31,27 +31,17 @@ async function initDB() {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
-        
+
         await pool.query(`ALTER TABLE feedbacks ADD COLUMN IF NOT EXISTS attachment TEXT;`);
         await pool.query(`ALTER TABLE feedbacks ADD COLUMN IF NOT EXISTS is_quarantined BOOLEAN DEFAULT FALSE;`);
         await pool.query(`ALTER TABLE feedbacks ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
-        
-        // 👉 THIS IS THE MISSING PIECE!
+
         await pool.query(`
             CREATE TABLE IF NOT EXISTS stalls (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(100) UNIQUE NOT NULL
             );
         `);
-
-        const stallCount = await pool.query('SELECT COUNT(*) FROM stalls');
-        if (parseInt(stallCount.rows[0].count) === 0) {
-            await pool.query(`
-                INSERT INTO stalls (name) VALUES 
-                ('Main Hot Meals'), ('Snacks & Sandwiches'), ('Drinks & Desserts'), ('Noodles & Dimsum'), ('Fast Food Corner');
-            `);
-            console.log("🍽️ Automatically inserted 5 default food stalls.");
-        }
 
         console.log("✅ Database initialized: 'users', 'feedbacks', and 'stalls' tables are ready.");
     } catch (err) {
@@ -115,8 +105,8 @@ async function deleteStall(id) {
     await pool.query(`DELETE FROM stalls WHERE id = $1`, [id]);
 }
 
-module.exports = { 
-    pool, addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback, 
+module.exports = {
+    pool, addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback,
     tamperFeedback, getLightFeedbacks, getFeedbackPhoto,
-    getAllStalls, addStall, deleteStall 
+    getAllStalls, addStall, deleteStall
 };

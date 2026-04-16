@@ -43,18 +43,23 @@ export default function FeedbackForm({ navigate }) {
       return;
     }
 
-    // 👈 NEW: Fetch stalls from database on load
     const loadStalls = async () => {
       try {
+        setLoadingStalls(true);
         const data = await fetchStalls();
-        // Handle if backend returns objects [{name: "Stall 1"}] or strings ["Stall 1"]
-        if (data && data.length > 0) {
-          const formattedStalls = data.map(s => typeof s === 'string' ? s : s.name);
+        if (data && Array.isArray(data)) {
+          const formattedStalls = data.map(s => s.name);
           setAvailableStalls(formattedStalls);
+          
+          // 👉 NEW: If there are no stalls, default to General Feedback
+          if (formattedStalls.length === 0) {
+            setSelectedStall("General Feedback");
+          }
         }
       } catch (err) {
         console.error("Failed to fetch stalls from DB:", err);
-        setAvailableStalls([]); // Clear out any stalls if the database fetch fails
+        setAvailableStalls([]);
+        setSelectedStall("General Feedback"); // Fallback if DB fetch fails
       } finally {
         setLoadingStalls(false);
       }
@@ -275,22 +280,26 @@ export default function FeedbackForm({ navigate }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: colors.textMuted, fontSize: '14px', padding: '16px 0' }}>
                       <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} color={colors.navy} /> Loading available stalls...
                     </div>
+                  ) : availableStalls.length === 0 ? (
+                    // 👉 NEW: Message shown when no stalls exist
+                    <div style={{ padding: '16px', backgroundColor: colors.bg, borderRadius: '8px', border: `1px dashed ${colors.border}`, color: colors.textMuted, fontSize: '14px', fontStyle: 'italic', marginBottom: '16px' }}>
+                      No specific stalls are listed right now. Your review will be submitted as <strong style={{ color: colors.navy }}>General Feedback</strong>.
+                    </div>
                   ) : (
-                    <div className="stall-grid">
-                      {availableStalls.map((stall) => (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                      {availableStalls.map(stall => (
                         <button
                           key={stall}
                           type="button"
                           onClick={() => setSelectedStall(stall)}
                           style={{
-                            padding: '14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit',
-                            backgroundColor: selectedStall === stall ? colors.navy : colors.bg,
+                            padding: '10px 16px', fontSize: '14px', fontWeight: 600,
+                            backgroundColor: selectedStall === stall ? colors.navy : colors.white,
                             color: selectedStall === stall ? colors.white : colors.text,
                             border: `1px solid ${selectedStall === stall ? colors.navy : colors.border}`,
-                            display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', textAlign: 'center'
+                            borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit'
                           }}
                         >
-                          <Store size={16} color={selectedStall === stall ? colors.gold : colors.textMuted} />
                           {stall}
                         </button>
                       ))}
