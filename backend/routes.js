@@ -7,6 +7,14 @@ const {
 } = require('./db');
 const { verifySignature } = require('./eddsa');
 
+// 👉 CLOUDINARY CONFIGURATION
+const cloudinary = require('cloudinary').v2;
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
 // 👇 1. Import our new Authentication logic
 const { registerUser, loginUser, requireAuth } = require('./auth');
 
@@ -33,11 +41,10 @@ router.post('/feedback', requireAuth, async (req, res) => {
     if (!comment) return res.status(400).json({ error: 'Comment required' });
     if (!signature || !public_key) return res.status(400).json({ error: 'Cryptographic signature and public key are required.' });
 
-    // 1. Reconstruct the payload exactly as the frontend signed it.
-    // (We will update the frontend next so it signs using their true verified name)
+    // 1. Reconstruct the payload exactly as the frontend signed it (Using original Base64 attachment).
     const feedbackForVerify = { customer_name, rating, comment, attachment };
 
-    // 2. VERIFY the frontend's signature BEFORE saving to the database
+    // 2. VERIFY the frontend's signature BEFORE doing anything else
     try {
         const pubKeyBin = Buffer.from(public_key, 'base64');
         const isValid = verifySignature(pubKeyBin, feedbackForVerify, signature);
@@ -49,7 +56,18 @@ router.post('/feedback', requireAuth, async (req, res) => {
         return res.status(401).json({ error: 'Malformed cryptographic keys provided.' });
     }
 
-    // 3. If verification passes, insert it into PostgreSQL linking their user_id!
+    // 👉 3. CLOUDINARY UPLOAD: Now that signature is verified, swap the heavy Base64 string for a Cloud URL!
+    try {
+        if (attachment && !attachment.startsWith('http')) {
+            const uploadRes = await cloudinary.uploader.upload(attachment, { folder: 'ua_canteen/feedback' });
+            attachment = uploadRes.secure_url; // Replace string with URL
+        }
+    } catch (uploadError) {
+        console.error("Cloudinary Error:", uploadError);
+        return res.status(500).json({ error: "Failed to upload image to cloud storage." });
+    }
+
+    // 4. Insert it into PostgreSQL linking their user_id and the new short Cloudinary URL!
     try {
         const inserted = await addFeedback({ user_id, customer_name, rating, comment, signature, public_key, attachment });
         res.status(201).json(inserted);
@@ -59,7 +77,6 @@ router.post('/feedback', requireAuth, async (req, res) => {
     }
 });
 
-// ... (The rest of your routes remain exactly the same) ...
 
 router.get('/feedbacks', async (req, res) => {
     try {
@@ -180,10 +197,16 @@ router.get('/stalls', async (req, res) => {
 
 router.post('/stalls', async (req, res) => {
     try {
-        const { name, image } = req.body; // 👉 NEW: Extract image
+        let { name, image } = req.body;
         if (!name) return res.status(400).json({ error: "Stall name is required" });
 
-        const newStall = await addStall(name, image);
+        // 👉 CLOUDINARY UPLOAD: Stalls Cover Photo
+        if (image && !image.startsWith('http')) {
+            const uploadRes = await cloudinary.uploader.upload(image, { folder: 'ua_canteen/stalls' });
+            image = uploadRes.secure_url;
+        }
+
+        const newStall = await addStall(name, image || null);
         res.json(newStall);
     } catch (err) {
         if (err.message.toLowerCase().includes("unique")) {
@@ -193,13 +216,17 @@ router.post('/stalls', async (req, res) => {
     }
 });
 
-// 👉 NEW: PUT (Edit) a stall
 router.put('/stalls/:id', async (req, res) => {
     try {
-        const { name, image } = req.body;
+        let { name, image } = req.body;
         if (!name) return res.status(400).json({ error: "Stall name is required" });
 
-        // 👉 Using editStall from the import at the top
+        // 👉 CLOUDINARY UPLOAD: Stalls Cover Photo Edit
+        if (image && !image.startsWith('http')) {
+            const uploadRes = await cloudinary.uploader.upload(image, { folder: 'ua_canteen/stalls' });
+            image = uploadRes.secure_url;
+        }
+
         const updatedStall = await editStall(req.params.id, name, image || null);
         res.json(updatedStall);
     } catch (err) {
