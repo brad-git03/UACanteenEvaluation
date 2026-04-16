@@ -202,8 +202,9 @@ export default function FeedbackForm({ navigate }) {
         @media (max-width: 768px) {
           .card-inner { padding: 24px; }
           .form-grid { grid-template-columns: 1fr; gap: 24px; }
-          .action-buttons { flex-direction: column-reverse; }
-          .action-buttons button { width: 100% !important; max-width: 100% !important; }
+          /* 👉 Make Action Buttons side-by-side & identical size on Mobile */
+          .action-buttons { flex-direction: row !important; gap: 12px !important; margin-top: 24px !important; }
+          .action-buttons button { width: 50% !important; max-width: 100% !important; flex: 1 !important; padding: 14px 8px !important; font-size: 14px !important; justify-content: center !important; }
         }
 
         @media (max-width: 480px) {
@@ -605,8 +606,11 @@ export default function FeedbackForm({ navigate }) {
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', textAlign: 'center', animation: 'fadeUp 0.4s ease' }}>
                 <Loader2 size={48} color={colors.navy} style={{ animation: 'spin 1.5s linear infinite', marginBottom: '24px' }} />
                 <h3 style={{ fontSize: '24px', fontWeight: 700, color: colors.navy, marginBottom: '12px', letterSpacing: '-0.02em' }}>Securing Data Payload</h3>
-                <div style={{ backgroundColor: '#0F172A', color: '#10B981', padding: '16px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '13px', width: '100%', maxWidth: '450px', textAlign: 'left', border: '1px solid #1E293B', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)', wordBreak: 'break-all' }}>
-                  <span style={{ animation: 'pulse 1.5s infinite' }}>&gt; {signMessage}</span>
+                <div style={{ backgroundColor: colors.white, color: colors.navy, padding: '16px 20px', borderRadius: '12px', fontFamily: 'monospace', fontSize: '12px', fontWeight: '500', width: '100%', maxWidth: '340px', textAlign: 'center', border: `1px solid ${colors.border}`, boxShadow: '0 8px 24px rgba(12, 35, 64, 0.08)', wordBreak: 'break-word', boxSizing: 'border-box', margin: '0 auto' }}>
+                  <span style={{ animation: 'pulse 1.5s infinite' }}>
+                    <strong style={{ color: colors.gold, marginRight: '6px' }}>&gt;</strong> 
+                    {signMessage}
+                  </span>
                 </div>
                 <style>{`
                   @keyframes spin { 100% { transform: rotate(360deg); } }

@@ -47,18 +47,15 @@ export default function LandingPage({ navigate }) {
 
         /* Mobile Phones */
         @media (max-width: 480px) {
-          /* Center the logo and text now that the button is gone */
           .header-pad { padding: 12px 16px !important; justify-content: center !important; }
           .logo-img { height: 38px !important; }
-          
-          /* Show University Text but scale it down to fit! */
           .univ-text { font-size: 16px !important; } 
-          
-          /* Hide Staff Button */
           .staff-btn-container { display: none !important; }
-          
           .hero-h2 { font-size: 28px !important; }
           .card-h3 { font-size: 22px !important; }
+          
+          /* 👉 FIX 1: Hide specific elements on mobile */
+          .hide-on-mobile { display: none !important; }
         }
       `}</style>
 
@@ -187,8 +184,8 @@ export default function LandingPage({ navigate }) {
         <p style={{ margin: 0, fontWeight: 500 }}>© 2026 University of the Assumption. All Rights Reserved.</p>
         <p style={{ margin: '8px 0 0 0', color: '#94A3B8', fontSize: '13px' }}>Cryptographically Secured EdDSA System</p>
         
-        {/* Hidden Developer Tool for Presentation */}
-        <div style={{ marginTop: '32px' }}>
+        {/* 👉 FIX: Added hide-on-mobile class here! */}
+        <div className="hide-on-mobile" style={{ marginTop: '32px' }}>
           <button 
             onClick={() => navigate('hacker')}
             style={{ background: 'none', border: 'none', color: '#334155', fontSize: '12px', cursor: 'pointer', letterSpacing: '0.05em', fontFamily: 'inherit' }}

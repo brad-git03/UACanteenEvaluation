@@ -79,7 +79,6 @@ export default function Login({ navigate }) {
         /* Tablets & Large Phones */
         @media (max-width: 900px) {
           .split-container { flex-direction: column; }
-          /* Increased top padding to 80px so it perfectly clears the absolute Back Button */
           .left-panel { padding: 80px 20px 40px 20px; flex: none; align-items: center; text-align: center; }
           .right-panel { padding: 20px; align-items: flex-start; }
           .form-box { padding: 24px; }
@@ -88,13 +87,12 @@ export default function Login({ navigate }) {
           .back-btn { top: 20px; left: 20px; bottom: auto; }
         }
 
-        /* Small Mobile Phones (Galaxy S8, iPhone Mini, etc.) */
+        /* Small Mobile Phones */
         @media (max-width: 480px) {
-          .left-panel { padding-top: 70px; } /* Fine-tuned for small screens */
-          .title-text { font-size: 30px; } /* Shrunk title */
-          .desc-text { font-size: 15px; } /* Shrunk paragraph */
-          .logo-img { width: 44px; } /* Shrunk logo */
-          /* Shrunk University text so it fits on one line */
+          .left-panel { padding-top: 70px; }
+          .title-text { font-size: 30px; } 
+          .desc-text { font-size: 15px; } 
+          .logo-img { width: 44px; } 
           .univ-title { font-size: 12px; } 
           .univ-subtitle { font-size: 10px; }
           .brand-header { gap: 12px; }
@@ -161,10 +159,10 @@ export default function Login({ navigate }) {
         }}>
           
           <div style={{ display: 'flex', gap: '16px', marginBottom: '32px' }}>
-            <button onClick={() => {setIsLogin(true); setError('');}} style={{ flex: 1, padding: '12px', background: isLogin ? colors.navy : 'transparent', color: isLogin ? colors.white : colors.text, border: `1px solid ${isLogin ? colors.navy : colors.border}`, borderRadius: '8px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit' }}>
+            <button onClick={() => {setIsLogin(true); setError('');}} style={{ flex: 1, padding: '12px', background: isLogin ? colors.navy : 'transparent', color: isLogin ? colors.white : colors.navy, border: `1px solid ${colors.navy}`, borderRadius: '8px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit' }}>
               Sign In
             </button>
-            <button onClick={() => {setIsLogin(false); setError('');}} style={{ flex: 1, padding: '12px', background: !isLogin ? colors.navy : 'transparent', color: !isLogin ? colors.white : colors.text, border: `1px solid ${!isLogin ? colors.navy : colors.border}`, borderRadius: '8px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit' }}>
+            <button onClick={() => {setIsLogin(false); setError('');}} style={{ flex: 1, padding: '12px', background: !isLogin ? colors.navy : 'transparent', color: !isLogin ? colors.white : colors.navy, border: `1px solid ${colors.navy}`, borderRadius: '8px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit' }}>
               Create Account
             </button>
           </div>
@@ -186,7 +184,7 @@ export default function Login({ navigate }) {
               <label style={{ fontSize: '12px', fontWeight: 600, color: colors.textMuted, marginBottom: '8px', display: 'block', letterSpacing: '0.05em' }}>UA ID NUMBER</label>
               <div style={{ position: 'relative' }}>
                 <User size={18} color={colors.textMuted} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
-                <input required type="text" placeholder="e.g. 2024123456" value={uaId} onChange={(e) => setUaId(e.target.value)} style={{ width: '100%', padding: '14px 16px 14px 44px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '15px', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                <input required type="text" placeholder="e.g. 2024123456" value={uaId} onChange={(e) => setUaId(e.target.value)} style={{ width: '100%', padding: '14px 16px 14px 44px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '15px', color: colors.text, fontFamily: 'inherit', boxSizing: 'border-box' }} />
               </div>
             </div>
 
@@ -194,14 +192,20 @@ export default function Login({ navigate }) {
               <>
                 <div>
                   <label style={{ fontSize: '12px', fontWeight: 600, color: colors.textMuted, marginBottom: '8px', display: 'block', letterSpacing: '0.05em' }}>FULL NAME</label>
-                  <input required type="text" placeholder="Maria Santos" value={fullName} onChange={(e) => setFullName(e.target.value)} style={{ width: '100%', padding: '14px 16px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '15px', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                  <input required type="text" placeholder="Maria Santos" value={fullName} onChange={(e) => setFullName(e.target.value)} style={{ width: '100%', padding: '14px 16px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '15px', color: colors.text, fontFamily: 'inherit', boxSizing: 'border-box' }} />
                 </div>
                 <div>
                   <label style={{ fontSize: '12px', fontWeight: 600, color: colors.textMuted, marginBottom: '8px', display: 'block', letterSpacing: '0.05em' }}>ACCOUNT ROLE</label>
-                  <select value={role} onChange={(e) => setRole(e.target.value)} style={{ width: '100%', padding: '14px 16px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '15px', outline: 'none', backgroundColor: colors.white, boxSizing: 'border-box', fontFamily: 'inherit' }}>
-                    <option value="student">Student</option>
-                    <option value="staff">Staff / Faculty</option>
-                  </select>
+                  
+                  {/* 👉 FIX 2: Beautiful custom toggle buttons instead of ugly <select> native dropdown! */}
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <button type="button" onClick={() => setRole('student')} style={{ flex: 1, padding: '14px 10px', borderRadius: '8px', border: `1px solid ${role === 'student' ? colors.navy : colors.border}`, background: role === 'student' ? colors.navy : colors.bg, color: role === 'student' ? colors.white : colors.textMuted, fontWeight: 600, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit' }}>
+                      Student
+                    </button>
+                    <button type="button" onClick={() => setRole('staff')} style={{ flex: 1, padding: '14px 10px', borderRadius: '8px', border: `1px solid ${role === 'staff' ? colors.navy : colors.border}`, background: role === 'staff' ? colors.navy : colors.bg, color: role === 'staff' ? colors.white : colors.textMuted, fontWeight: 600, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit' }}>
+                      Staff / Faculty
+                    </button>
+                  </div>
                 </div>
               </>
             )}
@@ -210,11 +214,11 @@ export default function Login({ navigate }) {
               <label style={{ fontSize: '12px', fontWeight: 600, color: colors.textMuted, marginBottom: '8px', display: 'block', letterSpacing: '0.05em' }}>PASSWORD</label>
               <div style={{ position: 'relative' }}>
                 <Lock size={18} color={colors.textMuted} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
-                <input required type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: '100%', padding: '14px 16px 14px 44px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '15px', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                <input required type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: '100%', padding: '14px 16px 14px 44px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '15px', color: colors.text, fontFamily: 'inherit', boxSizing: 'border-box' }} />
               </div>
             </div>
 
-            <button disabled={loading} type="submit" style={{ marginTop: '12px', width: '100%', padding: '16px', backgroundColor: colors.navy, color: colors.white, border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', transition: 'background 0.2s', opacity: loading ? 0.7 : 1, fontFamily: 'inherit' }}>
+            <button disabled={loading} type="submit" style={{ marginTop: '12px', width: '100%', padding: '16px', backgroundColor: colors.navy, color: colors.white, border: 'none', borderRadius: '8px', fontWeight: 600, fontSize: '15px', cursor: 'pointer', transition: 'opacity 0.2s', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', fontFamily: 'inherit' }}>
               {loading ? 'Processing...' : (isLogin ? 'Authenticate & Enter' : 'Register Identity')} 
               {!loading && <ArrowRight size={18} />}
             </button>
