@@ -41,8 +41,8 @@ router.post('/feedback', requireAuth, async (req, res) => {
     if (!comment) return res.status(400).json({ error: 'Comment required' });
     if (!signature || !public_key) return res.status(400).json({ error: 'Cryptographic signature and public key are required.' });
 
-    // 1. Reconstruct the payload exactly as the frontend signed it (Using original Base64 attachment).
-    const feedbackForVerify = { customer_name, rating, comment, attachment };
+    // 👉 FIX: Reconstruct the payload WITHOUT the attachment for the signature check
+    const feedbackForVerify = { customer_name, rating, comment };
 
     // 2. VERIFY the frontend's signature BEFORE doing anything else
     try {
@@ -83,11 +83,11 @@ router.get('/feedbacks', async (req, res) => {
         const rows = await getAllFeedback();
 
         const verifiedRows = rows.map(row => {
+            // 👉 FIX: Reconstruct the payload WITHOUT the attachment for the signature check
             const feedbackForVerify = {
                 customer_name: row.customer_name,
                 rating: row.rating,
-                comment: row.comment,
-                attachment: row.attachment
+                comment: row.comment
             };
             let valid = false;
             try {
@@ -141,7 +141,8 @@ router.post('/verify', async (req, res) => {
         } catch (e) { }
     }
 
-    const feedbackForVerify = { customer_name, rating, comment, attachment };
+    // 👉 FIX: Reconstruct the payload WITHOUT the attachment for the signature check
+    const feedbackForVerify = { customer_name, rating, comment };
 
     try {
         const pubKeyBin = Buffer.from(public_key, 'base64');

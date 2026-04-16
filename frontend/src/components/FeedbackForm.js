@@ -86,10 +86,11 @@ export default function FeedbackForm({ navigate }) {
   const totalScore = Object.values(ratings).reduce((sum, val) => sum + val, 0);
   const overallRating = Math.round(totalScore / 5);
 
+  // 👉 FIX: Prevents white screen on logout
   const handleLogout = () => {
     localStorage.removeItem('ua_token');
     localStorage.removeItem('ua_user');
-    navigate('landing');
+    window.location.href = '/'; 
   };
 
   const handleImageUpload = (e) => {
@@ -124,11 +125,11 @@ export default function FeedbackForm({ navigate }) {
 
     const payloadText = `[Stall: ${selectedStall}] [Scores -> Food: ${ratings.Food}/5 | Service: ${ratings.Service}/5 | Staff: ${ratings.Staff}/5 | Clean: ${ratings.Cleanliness}/5 | Value: ${ratings.Value}/5]\n\n${form.comment}`;
 
-    const payload = {
+    // 👉 FIX: Exclude the image attachment from the cryptographic signature calculation!
+    const payloadToSign = {
       customer_name: user.full_name,
       rating: overallRating,
-      comment: payloadText,
-      attachment: imagePreview
+      comment: payloadText
     };
 
     try {
@@ -141,11 +142,13 @@ export default function FeedbackForm({ navigate }) {
       setSignMessage(`Signing payload as ${user.full_name}...`);
       await new Promise(resolve => setTimeout(resolve, 400));
 
-      const clientSignature = signData(secretKey, payload);
+      // Sign the smaller payload
+      const clientSignature = signData(secretKey, payloadToSign);
 
       setSignMessage("Transmitting signature & public key to server...");
       await new Promise(resolve => setTimeout(resolve, 400));
 
+      // Construct the full payload containing everything (including the massive image)
       const fullPayload = {
         rating: overallRating,
         comment: payloadText,
