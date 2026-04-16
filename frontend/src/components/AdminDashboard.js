@@ -380,7 +380,7 @@ export default function AdminDashboard({ navigate }) {
             <div style={{ fontSize: '14px', fontWeight: 600, color: colors.white }}>UA Admin</div>
             <div style={{ fontSize: '12px', color: '#94A3B8' }}>admin@ua.edu.ph</div>
           </div>
-          <LogOut size={18} color="#94A3B8" style={{ cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = colors.white} onMouseLeave={e => e.currentTarget.style.color = '#94A3B8'} onClick={() => { localStorage.removeItem('ua_token'); navigate('/'); }} />
+          <LogOut size={18} color="#94A3B8" style={{ cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = colors.white} onMouseLeave={e => e.currentTarget.style.color = '#94A3B8'} onClick={() => { localStorage.removeItem('ua_token'); localStorage.removeItem('ua_user'); window.location.href = '/'; }} />
         </div>
       </div>
 
