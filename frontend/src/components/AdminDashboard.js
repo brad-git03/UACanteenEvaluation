@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import StallManager from './StallManager';
-import { getAllFeedbacks, verifyFeedback, deleteFeedback, quarantineFeedback, getFeedbackPhoto } from "../api";
+import { getAllFeedbacks, verifyFeedback, deleteFeedback, quarantineFeedback, getFeedbackPhoto, fetchStalls } from "../api";
 import {
   PieChart, Pie, Cell, Tooltip as PieTooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as BarTooltip
@@ -19,6 +19,10 @@ export default function AdminDashboard({ navigate }) {
   const [traceStatus, setTraceStatus] = useState('loading');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
+
+  // 👉 NEW: State for the Stall Filter dropdown
+  const [dashboardStallFilter, setDashboardStallFilter] = useState("All");
+  const [stallsList, setStallsList] = useState([]);
 
   const isAuditingRef = useRef(isAuditing);
   useEffect(() => { isAuditingRef.current = isAuditing; }, [isAuditing]);
@@ -55,6 +59,9 @@ export default function AdminDashboard({ navigate }) {
         console.error("Live sync error:", error);
       }
     };
+
+    // 👉 Fetches the list of stalls for the dropdown filter!
+    fetchStalls().then(data => setStallsList(data)).catch(console.error);
 
     fetchAndAudit();
     const intervalId = setInterval(fetchAndAudit, 3000);
@@ -99,8 +106,18 @@ export default function AdminDashboard({ navigate }) {
   const currentItems = searchedFeedbacks.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(searchedFeedbacks.length / itemsPerPage);
 
-  const total = safeFeedbacks.length;
-  const avgValue = total > 0 ? Number((safeFeedbacks.reduce((sum, f) => sum + f.rating, 0) / total).toFixed(2)) : 0;
+  // 👉 NEW: Filter dashboard math based on the selected stall!
+  const dashboardFeedbacks = dashboardStallFilter === "All" 
+    ? safeFeedbacks 
+    : safeFeedbacks.filter(f => {
+        const stallMatch = f.comment?.match(/\[Stall: (.*?)\]/);
+        const stallName = stallMatch ? stallMatch[1] : 'General Feedback';
+        return stallName === dashboardStallFilter;
+      });
+
+  // Math uses `dashboardFeedbacks` instead of `safeFeedbacks`
+  const total = dashboardFeedbacks.length;
+  const avgValue = total > 0 ? Number((dashboardFeedbacks.reduce((sum, f) => sum + f.rating, 0) / total).toFixed(2)) : 0;
   const avgPercent = Math.round((avgValue / 5) * 100);
   const avgLabel = avgValue >= 4.5 ? "Excellent" : avgValue >= 3.5 ? "Good" : avgValue >= 2.5 ? "Fair" : "Needs Improvement";
 
@@ -108,15 +125,16 @@ export default function AdminDashboard({ navigate }) {
 
   const pieData = [5, 4, 3, 2, 1].map(star => ({
     star, name: `${star} Stars`,
-    value: safeFeedbacks.filter(f => f.rating === star).length,
-    percentage: total > 0 ? Number(((safeFeedbacks.filter(f => f.rating === star).length / total) * 100).toFixed(1)) : 0
+    value: dashboardFeedbacks.filter(f => f.rating === star).length,
+    percentage: total > 0 ? Number(((dashboardFeedbacks.filter(f => f.rating === star).length / total) * 100).toFixed(1)) : 0
   })).filter(d => d.value > 0);
+  
   const dominantRating = pieData.length > 0 ? pieData.reduce((best, current) => current.value > best.value ? current : best, pieData[0]) : { star: 'N/A' };
 
   const categoryTotals = { Food: 0, Service: 0, Staff: 0, Clean: 0, Value: 0 };
   let count = 0;
 
-  safeFeedbacks.forEach(f => {
+  dashboardFeedbacks.forEach(f => {
     const match = f?.comment?.match(/\[Scores -> Food: (\d)\/5 \| Service: (\d)\/5 \| Staff: (\d)\/5 \| Clean: (\d)\/5 \| Value: (\d)\/5\]/);
     if (match) {
       categoryTotals.Food += parseInt(match[1]); categoryTotals.Service += parseInt(match[2]);
@@ -231,10 +249,10 @@ export default function AdminDashboard({ navigate }) {
     link.remove();
   };
 
-    const parseFeedbackData = (text) => {
+  // 👉 NEW: Extracts Stall Name from the comment
+  const parseFeedbackData = (text) => {
     if (!text) return { stall: null, metrics: null, text: "No comment provided." };
     
-    // Extract the stall name we baked into the text
     let stallName = "General Feedback";
     const stallMatch = text.match(/\[Stall: (.*?)\]/);
     if (stallMatch) {
@@ -290,13 +308,13 @@ export default function AdminDashboard({ navigate }) {
   const PaginationControls = () => (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '24px', padding: '16px 0', borderTop: `1px solid ${colors.border}` }}>
       <span style={{ fontSize: '14px', color: colors.textMuted }}>
-        Showing <strong>{currentItems.length > 0 ? indexOfFirstItem + 1 : 0}</strong> to <strong>{Math.min(indexOfLastItem, searchedFeedbacks.length)}</strong> of <strong>{searchedFeedbacks.length}</strong>
+        Showing <strong>{currentItems.length > 0 ? indexOfFirstItem + 1 : 0}</strong> to <strong>{Math.min(indexOfLastItem, searchedFeedbacks.length)}</strong> of <strong>{searchedFeedbacks.length}</strong> entries
       </span>
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
         <button
           disabled={currentPage === 1}
           onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-          style={{ padding: '8px 14px', fontSize: '14px', fontWeight: 500, backgroundColor: colors.white, border: `1px solid ${colors.border}`, borderRadius: '6px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: '6px', color: colors.text }}
+          style={{ padding: '8px 14px', fontSize: '14px', fontWeight: 500, backgroundColor: colors.white, border: `1px solid ${colors.border}`, borderRadius: '6px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
         >
           <ChevronLeft size={16} /> Prev
         </button>
@@ -306,7 +324,7 @@ export default function AdminDashboard({ navigate }) {
         <button
           disabled={currentPage === totalPages || totalPages === 0}
           onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-          style={{ padding: '8px 14px', fontSize: '14px', fontWeight: 500, backgroundColor: colors.white, border: `1px solid ${colors.border}`, borderRadius: '6px', cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer', opacity: (currentPage === totalPages || totalPages === 0) ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: '6px', color: colors.text }}
+          style={{ padding: '8px 14px', fontSize: '14px', fontWeight: 500, backgroundColor: colors.white, border: `1px solid ${colors.border}`, borderRadius: '6px', cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer' }}
         >
           Next <ChevronRight size={16} />
         </button>
@@ -332,7 +350,7 @@ export default function AdminDashboard({ navigate }) {
         padding: '40px 24px',
         display: 'flex',
         flexDirection: 'column',
-        borderRight: `4px solid ${colors.gold}` /* 👉 ADDED UNIVERSITY GOLD ACCENT LINE HERE */
+        borderRight: `4px solid ${colors.gold}`
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '40px' }}>
           <img src="/ua-logo.png" alt="UA Logo" style={{ width: '48px', height: '48px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.1)' }} />
@@ -357,12 +375,12 @@ export default function AdminDashboard({ navigate }) {
         </div>
 
         <div style={{ marginTop: 'auto', background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: colors.gold, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: colors.navy, fontSize: '16px' }}>A</div>
+          <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: colors.gold, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: colors.navy }}>A</div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: '14px', fontWeight: 600, color: colors.white }}>UA Admin</div>
             <div style={{ fontSize: '12px', color: '#94A3B8' }}>admin@ua.edu.ph</div>
           </div>
-          <LogOut size={18} color="#94A3B8" style={{ cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = colors.white} onMouseLeave={e => e.currentTarget.style.color = '#94A3B8'} onClick={() => navigate('landing')} title="Logout" />
+          <LogOut size={18} color="#94A3B8" style={{ cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = colors.white} onMouseLeave={e => e.currentTarget.style.color = '#94A3B8'} onClick={() => { localStorage.removeItem('ua_token'); navigate('/'); }} />
         </div>
       </div>
 
@@ -380,7 +398,6 @@ export default function AdminDashboard({ navigate }) {
               </p>
             </div>
             
-            {/* Here is the component we created! */}
             <StallManager />
           </div>
         )}
@@ -389,31 +406,51 @@ export default function AdminDashboard({ navigate }) {
         {activeMenu === "dashboard" && (
           <div style={{ animation: 'fadeUp 0.4s ease' }}>
             {activeBreachCount > 0 && (
-              <div style={{ backgroundColor: colors.dangerBg, border: `1px solid ${colors.danger}`, color: colors.danger, padding: '20px 24px', borderRadius: '12px', marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 4px 6px -1px rgba(239, 68, 68, 0.1)' }}>
+              <div style={{ backgroundColor: colors.dangerBg, border: `1px solid ${colors.danger}`, color: colors.danger, padding: '20px 24px', borderRadius: '12px', marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '20px', boxShadow: '0 10px 25px rgba(239, 68, 68, 0.1)' }}>
                 <AlertTriangle size={32} />
                 <div style={{ flex: 1 }}>
                   <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 700 }}>SECURITY COMPROMISED</h3>
                   <p style={{ margin: 0, fontSize: '14px', color: '#991B1B' }}>{activeBreachCount} record(s) have failed cryptographic integrity checks. They have been isolated from your metrics.</p>
                 </div>
-                <button onClick={() => setActiveMenu('quarantine')} style={{ backgroundColor: colors.danger, color: colors.white, border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', transition: 'background 0.2s' }}>View Breach Logs</button>
+                <button onClick={() => setActiveMenu('quarantine')} style={{ backgroundColor: colors.danger, color: colors.white, border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', transition: 'background-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#B91C1C'} onMouseLeave={e => e.currentTarget.style.backgroundColor = colors.danger}>
+                  View Logs
+                </button>
               </div>
             )}
 
-            <div style={{ marginBottom: '40px' }}>
-              <h1 style={{ fontSize: '32px', fontWeight: 700, color: colors.navy, margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>Dashboard <span style={{ color: colors.gold }}>Overview</span></h1>
-              <p style={{ color: colors.textMuted, margin: 0, fontSize: '16px' }}>Real-time verified insights from the secure database.</p>
+            {/* 👉 NEW: Dashboard Header with Filter Dropdown */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '40px', flexWrap: 'wrap', gap: '20px' }}>
+              <div>
+                <h1 style={{ fontSize: '32px', fontWeight: 700, color: colors.navy, margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>Dashboard <span style={{ color: colors.gold }}>Overview</span></h1>
+                <p style={{ color: colors.textMuted, margin: 0, fontSize: '16px' }}>Real-time verified insights from the secure database.</p>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em' }}>FILTER BY STALL</label>
+                <select
+                  value={dashboardStallFilter}
+                  onChange={(e) => setDashboardStallFilter(e.target.value)}
+                  style={{ padding: '10px 16px', borderRadius: '8px', border: `1px solid ${colors.border}`, backgroundColor: colors.white, fontSize: '15px', fontWeight: 600, color: colors.navy, outline: 'none', cursor: 'pointer', minWidth: '220px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
+                >
+                  <option value="All">All Stalls (Overall Metrics)</option>
+                  {stallsList.map(s => (
+                    <option key={s.id} value={s.name}>{s.name}</option>
+                  ))}
+                  <option value="General Feedback">General Feedback</option>
+                </select>
+              </div>
             </div>
 
             {/* Stats Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '24px', marginBottom: '40px' }}>
 
-              <div className="card-hover" style={{ backgroundColor: colors.white, borderRadius: '12px', padding: '24px', border: `1px solid ${colors.border}`, borderTop: `4px solid ${colors.navy}`, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.2s' }}>
+              <div className="card-hover" style={{ backgroundColor: colors.white, borderRadius: '12px', padding: '24px', border: `1px solid ${colors.border}`, borderTop: `4px solid ${colors.navy}`, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.3s' }}>
                 <div style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em', marginBottom: '12px' }}>VERIFIED RECORDS</div>
                 <div style={{ fontSize: '36px', fontWeight: 700, color: colors.navy, lineHeight: 1 }}>{total}</div>
                 <div style={{ fontSize: '13px', color: colors.textMuted, marginTop: '8px' }}>Safe cryptographic submissions</div>
               </div>
 
-              <div className="card-hover" style={{ backgroundColor: activeBreachCount > 0 ? colors.dangerBg : colors.white, borderRadius: '12px', padding: '24px', border: `1px solid ${activeBreachCount > 0 ? '#FCA5A5' : colors.border}`, borderTop: `4px solid ${activeBreachCount > 0 ? colors.danger : colors.success}`, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.2s' }}>
+              <div className="card-hover" style={{ backgroundColor: activeBreachCount > 0 ? colors.dangerBg : colors.white, borderRadius: '12px', padding: '24px', border: `1px solid ${activeBreachCount > 0 ? colors.danger : colors.border}`, borderTop: `4px solid ${activeBreachCount > 0 ? colors.danger : colors.success}`, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.3s' }}>
                 <div style={{ fontSize: '13px', color: activeBreachCount > 0 ? colors.danger : colors.textMuted, fontWeight: 600, letterSpacing: '0.05em', marginBottom: '12px' }}>SYSTEM INTEGRITY</div>
                 <div style={{ fontSize: '28px', fontWeight: 700, color: activeBreachCount > 0 ? colors.danger : colors.success, display: 'flex', alignItems: 'center', gap: '12px', lineHeight: 1 }}>
                   {activeBreachCount > 0 ? <><ShieldAlert size={28} /> ISOLATED</> : <><ShieldCheck size={28} /> SECURE</>}
@@ -423,7 +460,7 @@ export default function AdminDashboard({ navigate }) {
                 </div>
               </div>
 
-              <div className="card-hover" style={{ backgroundColor: colors.white, borderRadius: '12px', padding: '24px', border: `1px solid ${colors.border}`, borderTop: `4px solid ${colors.gold}`, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.2s' }}>
+              <div className="card-hover" style={{ backgroundColor: colors.white, borderRadius: '12px', padding: '24px', border: `1px solid ${colors.border}`, borderTop: `4px solid ${colors.gold}`, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.3s' }}>
                 <div style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em', marginBottom: '12px' }}>AVERAGE RATING</div>
                 <div style={{ fontSize: '36px', fontWeight: 700, color: colors.navy, display: 'flex', alignItems: 'baseline', gap: '4px', lineHeight: 1 }}>
                   {avgValue.toFixed(2)} <span style={{ fontSize: '16px', color: colors.textMuted, fontWeight: 500 }}>/ 5</span>
@@ -436,7 +473,7 @@ export default function AdminDashboard({ navigate }) {
                 </div>
               </div>
 
-              <div className="card-hover" style={{ backgroundColor: colors.white, borderRadius: '12px', padding: '24px', border: `1px solid ${colors.border}`, borderTop: `4px solid #3B82F6`, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.2s' }}>
+              <div className="card-hover" style={{ backgroundColor: colors.white, borderRadius: '12px', padding: '24px', border: `1px solid ${colors.border}`, borderTop: `4px solid #3B82F6`, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.3s' }}>
                 <div style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em', marginBottom: '12px' }}>TOP CATEGORY</div>
                 <div style={{ fontSize: '28px', fontWeight: 700, color: colors.navy, marginTop: '8px', lineHeight: 1 }}>{topCategory.name}</div>
                 <div style={{ fontSize: '14px', color: colors.textMuted, marginTop: '12px' }}>Highest rated at <strong>{topCategory.score}/5</strong></div>
@@ -505,7 +542,7 @@ export default function AdminDashboard({ navigate }) {
                           </div>
                         ))}
                       </div>
-                      <div style={{ marginTop: '24px', padding: '12px', borderRadius: '8px', backgroundColor: '#F8FAFC', border: `1px solid ${colors.border}`, fontSize: '13px', color: colors.textMuted }}>
+                      <div style={{ marginTop: '24px', padding: '12px', borderRadius: '8px', backgroundColor: '#F8FAFC', border: `1px solid ${colors.border}`, fontSize: '13px', color: colors.text, display: 'flex', justifyContent: 'space-between' }}>
                         Most common: <strong style={{ color: colors.navy }}>{dominantRating.star} Star</strong>
                       </div>
                     </div>
@@ -519,7 +556,7 @@ export default function AdminDashboard({ navigate }) {
 
         {/* ---------------- VIEW 2: SAFE RECORDS ---------------- */}
         {activeMenu === "records" && (
-          <div style={{ animation: 'fadeUp 0.4s ease', backgroundColor: colors.white, borderRadius: '16px', border: `1px solid ${colors.border}`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', minHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ animation: 'fadeUp 0.4s ease', backgroundColor: colors.white, borderRadius: '16px', border: `1px solid ${colors.border}`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', minHeight: '600px', display: 'flex', flexDirection: 'column' }}>
 
             <div style={{ padding: '32px 40px', borderBottom: `1px solid ${colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
               <div>
@@ -527,9 +564,9 @@ export default function AdminDashboard({ navigate }) {
                 <p style={{ color: colors.textMuted, fontSize: '15px', margin: 0 }}>Only cryptographically verified authentic records are shown here.</p>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: '8px', padding: '0 16px', height: '42px', width: '320px', border: `1px solid ${colors.border}`, boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: '8px', padding: '0 16px', height: '42px', width: '320px', border: `1px solid ${colors.border}` }}>
                 <Search size={18} color={colors.textMuted} style={{ marginRight: '12px', flexShrink: 0 }} />
-                <input type="text" placeholder="Search verified records..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '14px', width: '100%', color: colors.text, padding: 0, margin: 0, height: '100%' }} />
+                <input type="text" placeholder="Search verified records..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', fontSize: '14px', color: colors.text }} />
               </div>
             </div>
 
@@ -538,7 +575,7 @@ export default function AdminDashboard({ navigate }) {
                 <thead>
                   <tr>
                     <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '8%' }}>ID</th>
-                    <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '18%' }}><Clock size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} /> TIMESTAMP</th>
+                    <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '18%' }}><Clock size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> TIMESTAMP</th>
                     <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '18%' }}>CUSTOMER</th>
                     <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '34%' }}>FEEDBACK SUMMARY</th>
                     <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '10%' }}>RATING</th>
@@ -560,6 +597,7 @@ export default function AdminDashboard({ navigate }) {
                         </td>
                         <td style={{ padding: '20px 12px', color: colors.text, fontSize: '15px', fontWeight: 600 }}>{f.customer_name || 'Anonymous'}</td>
 
+                        {/* 👉 NEW: Table now shows Stall name */}
                         <td style={{ padding: '20px 12px', fontSize: '14px', color: colors.textMuted, lineHeight: 1.5 }}>
                           {parsed.stall && <span style={{ color: colors.navy, fontWeight: 600, backgroundColor: '#F1F5F9', padding: '4px 10px', borderRadius: '6px', marginRight: '8px' }}>{parsed.stall}</span>}
                           {parsed.metrics && <span style={{ fontSize: '12px', color: colors.textMuted }}>Metrics</span>}
@@ -568,7 +606,9 @@ export default function AdminDashboard({ navigate }) {
 
                         <td style={{ padding: '20px 12px', fontWeight: 700, color: colors.navy, fontSize: '15px' }}>{f.rating} <span style={{ color: colors.textMuted, fontWeight: 500 }}>/ 5</span></td>
                         <td style={{ padding: '20px 12px', textAlign: 'right' }}>
-                          <button onClick={() => openModal(f)} style={{ backgroundColor: colors.white, border: `1px solid ${colors.border}`, color: colors.navy, fontSize: '13px', fontWeight: 600, padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'} onMouseLeave={e => e.currentTarget.style.backgroundColor = colors.white}>View Full</button>
+                          <button onClick={() => openModal(f)} style={{ backgroundColor: colors.white, border: `1px solid ${colors.border}`, color: colors.navy, fontSize: '13px', fontWeight: 600, padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }} onMouseEnter={e => { e.currentTarget.style.backgroundColor = colors.navy; e.currentTarget.style.color = colors.white; }} onMouseLeave={e => { e.currentTarget.style.backgroundColor = colors.white; e.currentTarget.style.color = colors.navy; }}>
+                            View Full
+                          </button>
                         </td>
                       </tr>
                     );
@@ -584,7 +624,7 @@ export default function AdminDashboard({ navigate }) {
 
         {/* ---------------- VIEW 3: SECURITY AUDITOR LOGS ---------------- */}
         {activeMenu === "verify" && (
-          <div style={{ animation: 'fadeUp 0.4s ease', backgroundColor: colors.white, borderRadius: '16px', border: `1px solid ${colors.border}`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', minHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ animation: 'fadeUp 0.4s ease', backgroundColor: colors.white, borderRadius: '16px', border: `1px solid ${colors.border}`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', minHeight: '600px', display: 'flex', flexDirection: 'column' }}>
 
             <div style={{ padding: '32px 40px', borderBottom: `1px solid ${colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '20px' }}>
               <div>
@@ -596,18 +636,18 @@ export default function AdminDashboard({ navigate }) {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'flex-end' }}>
                 <div style={{ display: 'flex', gap: '12px' }}>
-                  <button onClick={exportToCSV} style={{ backgroundColor: colors.white, border: `1px solid ${colors.border}`, color: colors.text, padding: '10px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'} onMouseLeave={e => e.currentTarget.style.backgroundColor = colors.white}>
+                  <button onClick={exportToCSV} style={{ backgroundColor: colors.white, border: `1px solid ${colors.border}`, color: colors.text, padding: '10px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.backgroundColor = colors.white}>
                     <Download size={18} /> Export CSV
                   </button>
-                  <button onClick={runSystemAudit} disabled={isAuditing} style={{ backgroundColor: colors.navy, color: colors.white, border: 'none', padding: '10px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', opacity: isAuditing ? 0.8 : 1, transition: 'background-color 0.2s' }} onMouseEnter={e => { if (!isAuditing) e.currentTarget.style.backgroundColor = '#17365C' }} onMouseLeave={e => { if (!isAuditing) e.currentTarget.style.backgroundColor = colors.navy }}>
+                  <button onClick={runSystemAudit} disabled={isAuditing} style={{ backgroundColor: colors.navy, color: colors.white, border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: isAuditing ? 'not-allowed' : 'pointer', transition: 'background-color 0.2s', opacity: isAuditing ? 0.8 : 1 }} onMouseEnter={e => { if (!isAuditing) e.currentTarget.style.backgroundColor = '#17365C' }} onMouseLeave={e => { if (!isAuditing) e.currentTarget.style.backgroundColor = colors.navy }}>
                     {isAuditing ? <ShieldAlert size={18} /> : <ShieldCheck size={18} />}
                     {isAuditing ? "Auditing System..." : "Run Global Audit"}
                   </button>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: '8px', padding: '0 16px', height: '42px', width: '320px', border: `1px solid ${colors.border}`, boxSizing: 'border-box' }}>
+                <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: '8px', padding: '0 16px', height: '42px', width: '320px', border: `1px solid ${colors.border}` }}>
                   <Search size={18} color={colors.textMuted} style={{ marginRight: '12px', flexShrink: 0 }} />
-                  <input type="text" placeholder="Search all logs..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '14px', width: '100%', color: colors.text, padding: 0, margin: 0, height: '100%' }} />
+                  <input type="text" placeholder="Search all logs..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', fontSize: '14px', color: colors.text }} />
                 </div>
               </div>
             </div>
@@ -617,10 +657,10 @@ export default function AdminDashboard({ navigate }) {
                 <thead>
                   <tr>
                     <th style={{ padding: '16px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '6%' }}>ID</th>
-                    <th style={{ padding: '16px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '14%' }}><Clock size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} /> TIMESTAMP</th>
-                    <th style={{ padding: '16px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '20%' }}><Hash size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} /> SIGNATURE</th>
-                    <th style={{ padding: '16px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '16%' }}><Key size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} /> PUBLIC KEY</th>
-                    <th style={{ padding: '16px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '16%', textAlign: 'center' }}>INTEGRITY STATUS</th>
+                    <th style={{ padding: '16px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '14%' }}><Clock size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> TIMESTAMP</th>
+                    <th style={{ padding: '16px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '20%' }}><Key size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Ed25519 SIGNATURE</th>
+                    <th style={{ padding: '16px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '16%' }}><Hash size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> PUBLIC KEY</th>
+                    <th style={{ padding: '16px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '16%', textAlign: 'center' }}>INTEGRITY CHECK</th>
                     <th style={{ padding: '16px 12px', fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', borderBottom: `2px solid ${colors.border}`, width: '28%', textAlign: 'right' }}>ACTION</th>
                   </tr>
                 </thead>
@@ -646,8 +686,8 @@ export default function AdminDashboard({ navigate }) {
 
                         <td style={{ padding: '20px 12px', textAlign: 'center' }}>
                           {!verifyState[f.id]?.status && <span style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 500 }}>Pending check</span>}
-                          {verifyState[f.id]?.status === 'checking' && <span style={{ fontSize: '12px', fontWeight: 600, backgroundColor: '#FEF3C7', color: '#D97706', padding: '6px 12px', borderRadius: '20px', border: '1px solid #FDE68A' }}>Verifying...</span>}
-                          {verifyState[f.id]?.status === 'valid' && <span style={{ fontSize: '12px', fontWeight: 600, backgroundColor: colors.successBg, color: colors.success, padding: '6px 12px', borderRadius: '20px', border: '1px solid #A7F3D0' }}>✓ Valid Signature</span>}
+                          {verifyState[f.id]?.status === 'checking' && <span style={{ fontSize: '12px', fontWeight: 600, backgroundColor: '#FEF3C7', color: '#D97706', padding: '6px 12px', borderRadius: '20px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Loader2 size={14} style={{ animation: 'spin 1s infinite' }} /> VERIFYING</span>}
+                          {verifyState[f.id]?.status === 'valid' && <span style={{ fontSize: '12px', fontWeight: 600, backgroundColor: colors.successBg, color: colors.success, padding: '6px 12px', borderRadius: '20px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><ShieldCheck size={14} /> AUTHENTIC</span>}
                           {verifyState[f.id]?.status === 'invalid' && (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
                               <span style={{ fontSize: '12px', fontWeight: 600, backgroundColor: colors.danger, color: colors.white, padding: '6px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -665,7 +705,7 @@ export default function AdminDashboard({ navigate }) {
                             </button>
 
                             {isInvalid && !f.is_quarantined && (
-                              <button onClick={() => handleQuarantineRecord(f.id)} style={{ backgroundColor: colors.danger, color: colors.white, border: 'none', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700 }}>
+                              <button onClick={() => handleQuarantineRecord(f.id)} style={{ backgroundColor: colors.danger, color: colors.white, border: 'none', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <ShieldAlert size={14} /> Quarantine
                               </button>
                             )}
@@ -689,9 +729,9 @@ export default function AdminDashboard({ navigate }) {
 
         {/* ---------------- VIEW 4: THE QUARANTINE ZONE ---------------- */}
         {activeMenu === "quarantine" && (
-          <div style={{ animation: 'fadeUp 0.4s ease', backgroundColor: colors.white, borderRadius: '16px', border: `1px solid ${colors.danger}`, boxShadow: '0 10px 25px rgba(239, 68, 68, 0.1)', minHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ animation: 'fadeUp 0.4s ease', backgroundColor: colors.white, borderRadius: '16px', border: `1px solid ${colors.danger}`, boxShadow: '0 10px 25px rgba(239, 68, 68, 0.1)', minHeight: '600px', display: 'flex', flexDirection: 'column' }}>
 
-            <div style={{ padding: '32px 40px', borderBottom: `1px solid ${colors.dangerBg}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px', backgroundColor: colors.dangerBg, borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
+            <div style={{ padding: '32px 40px', borderBottom: `1px solid ${colors.dangerBg}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
               <div>
                 <h1 style={{ fontSize: '24px', fontWeight: 700, color: colors.danger, margin: '0 0 8px 0', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <ShieldAlert size={28} /> Quarantine Zone
@@ -699,9 +739,9 @@ export default function AdminDashboard({ navigate }) {
                 <p style={{ color: '#991B1B', fontSize: '15px', margin: 0 }}>Isolated records detected with tampered signatures. These are hidden from your metrics.</p>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', backgroundColor: colors.white, borderRadius: '8px', padding: '0 16px', height: '42px', width: '320px', border: `1px solid #FCA5A5`, boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', alignItems: 'center', backgroundColor: colors.white, borderRadius: '8px', padding: '0 16px', height: '42px', width: '320px', border: `1px solid #FCA5A5` }}>
                 <Search size={18} color={colors.danger} style={{ marginRight: '12px', flexShrink: 0 }} />
-                <input type="text" placeholder="Search quarantined..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '14px', width: '100%', color: colors.danger, padding: 0, margin: 0, height: '100%' }} />
+                <input type="text" placeholder="Search quarantined..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', fontSize: '14px', color: colors.text }} />
               </div>
             </div>
 
@@ -710,7 +750,7 @@ export default function AdminDashboard({ navigate }) {
                 <thead>
                   <tr>
                     <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 700, color: colors.danger, letterSpacing: '0.05em', borderBottom: `2px solid #FCA5A5`, width: '8%' }}>ID</th>
-                    <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 700, color: colors.danger, letterSpacing: '0.05em', borderBottom: `2px solid #FCA5A5`, width: '18%' }}><Clock size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} /> TIMESTAMP</th>
+                    <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 700, color: colors.danger, letterSpacing: '0.05em', borderBottom: `2px solid #FCA5A5`, width: '18%' }}><Clock size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> TIMESTAMP</th>
                     <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 700, color: colors.danger, letterSpacing: '0.05em', borderBottom: `2px solid #FCA5A5`, width: '18%' }}>CUSTOMER</th>
                     <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 700, color: colors.danger, letterSpacing: '0.05em', borderBottom: `2px solid #FCA5A5`, width: '34%' }}>TAMPERED PAYLOAD</th>
                     <th style={{ padding: '20px 12px', fontSize: '12px', fontWeight: 700, color: colors.danger, letterSpacing: '0.05em', borderBottom: `2px solid #FCA5A5`, width: '10%' }}>RATING</th>
@@ -732,6 +772,7 @@ export default function AdminDashboard({ navigate }) {
                         </td>
                         <td style={{ padding: '20px 12px', color: colors.text, fontSize: '15px', fontWeight: 600 }}>{f.customer_name || 'Anonymous'}</td>
 
+                        {/* 👉 NEW: Table now shows Stall name */}
                         <td style={{ padding: '20px 12px', fontSize: '14px', color: colors.textMuted, lineHeight: 1.5 }}>
                           {parsed.stall && <span style={{ color: '#991B1B', fontWeight: 600, backgroundColor: '#FEE2E2', padding: '4px 10px', borderRadius: '6px', marginRight: '8px' }}>{parsed.stall}</span>}
                           {parsed.metrics && <span style={{ fontSize: '12px', color: colors.textMuted }}>Metrics</span>}
@@ -740,7 +781,7 @@ export default function AdminDashboard({ navigate }) {
 
                         <td style={{ padding: '20px 12px', fontWeight: 700, color: colors.danger, fontSize: '15px' }}>{f.rating} <span style={{ color: '#F87171', fontWeight: 500 }}>/ 5</span></td>
                         <td style={{ padding: '20px 12px', textAlign: 'right' }}>
-                          <button onClick={() => handlePurgeRecord(f.id)} style={{ backgroundColor: colors.danger, color: colors.white, border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, marginLeft: 'auto', transition: 'background-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#B91C1C'} onMouseLeave={e => e.currentTarget.style.backgroundColor = colors.danger}>
+                          <button onClick={() => handlePurgeRecord(f.id)} style={{ backgroundColor: colors.danger, color: colors.white, border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px', transition: 'background-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#991B1B'} onMouseLeave={e => e.currentTarget.style.backgroundColor = colors.danger}>
                             <Trash2 size={16} /> Delete
                           </button>
                         </td>
@@ -760,12 +801,14 @@ export default function AdminDashboard({ navigate }) {
 
       {/* ---------------- 1. VIEW FEEDBACK MODAL (Modernized) ---------------- */}
       {selectedFeedback && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <div style={{ width: '100%', maxWidth: '550px', maxHeight: '90vh', overflowY: 'auto', backgroundColor: colors.white, borderRadius: '16px', padding: '40px', position: 'relative', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', animation: 'fadeUp 0.3s ease' }}>
-            <button onClick={() => setSelectedFeedback(null)} style={{ position: 'absolute', top: '24px', right: '24px', background: 'transparent', border: 'none', cursor: 'pointer', color: colors.textMuted, transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = colors.navy} onMouseLeave={e => e.currentTarget.style.color = colors.textMuted}><X size={24} /></button>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
+          <div style={{ width: '100%', maxWidth: '550px', maxHeight: '90vh', overflowY: 'auto', backgroundColor: colors.white, borderRadius: '16px', padding: '40px', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+            <button onClick={() => setSelectedFeedback(null)} style={{ position: 'absolute', top: '24px', right: '24px', background: 'transparent', border: 'none', cursor: 'pointer', color: colors.textMuted, padding: '4px' }}><X size={24} /></button>
 
             <h2 style={{ fontSize: '24px', fontWeight: 700, color: colors.navy, margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>Feedback Report</h2>
             <p style={{ fontSize: '14px', color: colors.textMuted, margin: '0 0 32px 0' }}>ID #{selectedFeedback.id} • Submitted via EdDSA Portal</p>
+
+            {/* 👉 NEW: Modal now shows Stall name */}
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${colors.border}`, paddingBottom: '16px', marginBottom: '16px' }}>
               <span style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em' }}>STALL REVIEWED</span>
               <span style={{ fontWeight: 700, color: colors.navy, fontSize: '15px', backgroundColor: '#F1F5F9', padding: '4px 12px', borderRadius: '6px' }}>
@@ -797,20 +840,22 @@ export default function AdminDashboard({ navigate }) {
                   ))}
                 </div>
               ) : (
-                <div style={{ fontSize: '14px', color: colors.textMuted, fontStyle: 'italic', padding: '16px', backgroundColor: '#F8FAFC', borderRadius: '8px', border: `1px solid ${colors.border}` }}>Legacy feedback. No detailed breakdown available.</div>
+                <div style={{ fontSize: '14px', color: colors.textMuted, fontStyle: 'italic', padding: '16px', backgroundColor: '#F8FAFC', borderRadius: '8px', border: `1px solid ${colors.border}` }}>
+                  No detailed metrics provided.
+                </div>
               )}
             </div>
 
             <div style={{ marginBottom: '32px' }}>
               <span style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 600, display: 'block', marginBottom: '12px', letterSpacing: '0.05em' }}>WRITTEN COMMENT</span>
-              <div style={{ padding: '20px', backgroundColor: '#F8FAFC', borderRadius: '12px', fontSize: '15px', color: colors.text, fontStyle: 'italic', border: `1px solid ${colors.border}`, lineHeight: '1.6' }}>
+              <div style={{ padding: '20px', backgroundColor: '#F8FAFC', borderRadius: '12px', fontSize: '15px', color: colors.text, fontStyle: 'italic', border: `1px solid ${colors.border}`, lineHeight: 1.6 }}>
                 "{parseFeedbackData(selectedFeedback.comment).text}"
               </div>
             </div>
 
             {/* EVIDENCE DISPLAY SECTION */}
             {selectedFeedback.has_attachment && !selectedFeedback.attachment && (
-              <div style={{ color: colors.textMuted, fontStyle: 'italic', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#F8FAFC', padding: '12px', borderRadius: '8px' }}>
+              <div style={{ color: colors.textMuted, fontStyle: 'italic', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#F8FAFC', padding: '12px', borderRadius: '8px', border: `1px solid ${colors.border}` }}>
                 <Loader2 size={14} style={{ animation: 'spin 1s infinite' }} /> Fetching high-res evidence data from secure vault...
               </div>
             )}
@@ -823,7 +868,7 @@ export default function AdminDashboard({ navigate }) {
                 <div
                   onClick={() => setFullScreenImage(selectedFeedback.attachment)}
                   title="Click to view full size"
-                  style={{ padding: '8px', backgroundColor: colors.white, borderRadius: '12px', border: `1px solid ${colors.border}`, display: 'flex', justifyContent: 'center', cursor: 'zoom-in', transition: 'border 0.2s' }}
+                  style={{ padding: '8px', backgroundColor: colors.white, borderRadius: '12px', border: `1px solid ${colors.border}`, display: 'flex', justifyContent: 'center', cursor: 'zoom-in', transition: 'border-color 0.2s' }}
                   onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.navy}
                   onMouseLeave={(e) => e.currentTarget.style.borderColor = colors.border}
                 >
@@ -843,20 +888,20 @@ export default function AdminDashboard({ navigate }) {
           style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15, 23, 42, 0.95)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'zoom-out' }}
         >
           <button style={{ position: 'absolute', top: '32px', right: '40px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'white' }}><X size={40} /></button>
-          <img src={fullScreenImage} alt="Full Screen Evidence" style={{ maxWidth: '90%', maxHeight: '90vh', objectFit: 'contain', outline: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }} />
+          <img src={fullScreenImage} alt="Full Screen Evidence" style={{ maxWidth: '90%', maxHeight: '90vh', objectFit: 'contain', outline: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }} />
         </div>
       )}
 
       {/* ---------------- 2. CYBER TERMINAL MODAL (Kept Dark/Hacker style) ---------------- */}
       {traceModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
           <div style={{ width: '100%', maxWidth: '700px', backgroundColor: '#020617', border: '1px solid #1E293B', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 25px 50px rgba(0,0,0,0.5)', animation: 'fadeUp 0.3s ease' }}>
 
             <div style={{ backgroundColor: '#0F172A', padding: '16px 24px', borderBottom: '1px solid #1E293B', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ color: '#94A3B8', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 600, letterSpacing: '0.05em' }}>
                 <Terminal size={16} color={colors.gold} /> Ed25519 VERIFICATION TRACE // TASK_ID: {traceModal.id}
               </div>
-              <button onClick={() => setTraceModal(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748B', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = '#64748B'}><X size={20} /></button>
+              <button onClick={() => setTraceModal(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748B', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.color = '#64748B'}><X size={20} /></button>
             </div>
 
             <div style={{ padding: '32px', color: '#10B981', fontSize: '14px', lineHeight: '1.6', fontFamily: 'monospace' }}>
@@ -893,7 +938,7 @@ export default function AdminDashboard({ navigate }) {
               )}
 
               {traceStatus !== 'loading' && (
-                <button onClick={() => setTraceModal(null)} style={{ marginTop: '40px', backgroundColor: 'transparent', color: '#94A3B8', border: '1px solid #334155', padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontFamily: 'monospace', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#1E293B'; e.currentTarget.style.color = '#fff' }} onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94A3B8' }}>
+                <button onClick={() => setTraceModal(null)} style={{ marginTop: '40px', backgroundColor: 'transparent', color: '#94A3B8', border: '1px solid #334155', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer', fontFamily: 'monospace', fontWeight: 'bold', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#1E293B'; e.currentTarget.style.color = '#F8FAFC'; }} onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94A3B8'; }}>
                   &gt; EXIT_TRACE
                 </button>
               )}
