@@ -6,15 +6,13 @@ const { keyPairFromSeed } = require('./eddsa');
 
 const app = express();
 
-// Set up CORS
+// Set up CORS - Strictly allow only your frontend URLs
 app.use(cors({
-    origin: function (origin, callback) {
-        if (!origin || origin.endsWith('.vercel.app') || origin.startsWith('http://localhost')) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    }
+    origin: [
+        'http://localhost:3000', 
+        'https://ua-canteen-evaluation.vercel.app' 
+    ],
+    credentials: true
 }));
 
 // 👉 CRITICAL FIX: Allow the server to accept large Base64 photos without crashing
