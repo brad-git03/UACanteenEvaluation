@@ -11,8 +11,8 @@ import bgMain from '../Background_img/wmremove-transformed.png';
 
 export default function FeedbackForm({ navigate }) {
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ comment: "" }); 
-  
+  const [form, setForm] = useState({ comment: "" });
+
   // 👈 NEW: Dynamic Stall State
   const [selectedStall, setSelectedStall] = useState("");
   const [availableStalls, setAvailableStalls] = useState([]);
@@ -20,11 +20,11 @@ export default function FeedbackForm({ navigate }) {
 
   const [ratings, setRatings] = useState({ Food: 5, Service: 5, Staff: 5, Cleanliness: 5, Value: 5 });
   const [hoverRating, setHoverRating] = useState({ category: '', val: 0 });
-  
+
   const [imagePreview, setImagePreview] = useState(null);
   const fileInputRef = useRef(null);
 
-  const [status, setStatus] = useState("idle"); 
+  const [status, setStatus] = useState("idle");
   const [signMessage, setSignMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [receiptData, setReceiptData] = useState(null);
@@ -35,7 +35,7 @@ export default function FeedbackForm({ navigate }) {
   useEffect(() => {
     const storedUser = localStorage.getItem('ua_user');
     const storedToken = localStorage.getItem('ua_token');
-    
+
     if (storedUser && storedToken) {
       setUser(JSON.parse(storedUser));
     } else {
@@ -53,11 +53,8 @@ export default function FeedbackForm({ navigate }) {
           setAvailableStalls(formattedStalls);
         }
       } catch (err) {
-        console.warn("Failed to fetch stalls from DB, using fallbacks.", err);
-        // Fallback so the app doesn't break while you build the backend
-        setAvailableStalls([
-          "Main Hot Meals", "Snacks & Sandwiches", "Drinks & Desserts", "Noodles & Dimsum", "Fast Food Corner"
-        ]);
+        console.error("Failed to fetch stalls from DB:", err);
+        setAvailableStalls([]); // Clear out any stalls if the database fetch fails
       } finally {
         setLoadingStalls(false);
       }
@@ -67,8 +64,8 @@ export default function FeedbackForm({ navigate }) {
   }, [navigate]);
 
   const colors = {
-    navy: '#0C2340', 
-    gold: '#E5A823', 
+    navy: '#0C2340',
+    gold: '#E5A823',
     bg: '#F1F5F9',
     white: '#FFFFFF',
     text: '#1E293B',
@@ -120,31 +117,31 @@ export default function FeedbackForm({ navigate }) {
     if (e) e.preventDefault();
     setStatus("signing");
     setSignMessage("Initializing Ed25519 Curve...");
-    
+
     // Securely bake the selected stall into the payload text
     const payloadText = `[Stall: ${selectedStall}] [Scores -> Food: ${ratings.Food}/5 | Service: ${ratings.Service}/5 | Staff: ${ratings.Staff}/5 | Clean: ${ratings.Cleanliness}/5 | Value: ${ratings.Value}/5]\n\n${form.comment}`;
 
     const payload = {
-      customer_name: user.full_name, 
+      customer_name: user.full_name,
       rating: overallRating,
       comment: payloadText,
-      attachment: imagePreview 
+      attachment: imagePreview
     };
 
     try {
       setSignMessage("Generating random Ed25519 keypair on device...");
-      await new Promise(resolve => setTimeout(resolve, 400)); 
+      await new Promise(resolve => setTimeout(resolve, 400));
 
       const { publicKey, secretKey } = generateKeyPair();
       const publicKeyBase64 = naclUtil.encodeBase64(publicKey);
 
       setSignMessage(`Signing payload as ${user.full_name}...`);
-      await new Promise(resolve => setTimeout(resolve, 400)); 
+      await new Promise(resolve => setTimeout(resolve, 400));
 
       const clientSignature = signData(secretKey, payload);
 
       setSignMessage("Transmitting signature & public key to server...");
-      await new Promise(resolve => setTimeout(resolve, 400)); 
+      await new Promise(resolve => setTimeout(resolve, 400));
 
       const fullPayload = {
         rating: overallRating,
@@ -155,14 +152,14 @@ export default function FeedbackForm({ navigate }) {
       };
 
       await submitFeedback(fullPayload);
-      
+
       setReceiptData({
         signature: clientSignature,
         public_key: publicKeyBase64
       });
-      
+
       setStatus("success");
-      setStep(3); 
+      setStep(3);
     } catch (err) {
       setStatus("error");
       setErrorMessage(err.message);
@@ -173,15 +170,15 @@ export default function FeedbackForm({ navigate }) {
     if (receiptData?.signature) {
       navigator.clipboard.writeText(receiptData.signature);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2500); 
+      setTimeout(() => setCopied(false), 2500);
     }
   };
 
-  if (!user) return null; 
+  if (!user) return null;
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: colors.bg, fontFamily: modernFont, position: 'relative' }}>
-      
+
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap');
         
@@ -214,19 +211,19 @@ export default function FeedbackForm({ navigate }) {
         }
       `}</style>
 
-      <div style={{ 
-        position: 'absolute', top: 0, left: 0, right: 0, height: '340px', 
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: '340px',
         backgroundImage: `url("${bgMain}")`, backgroundSize: 'cover', backgroundPosition: 'center',
-        borderBottom: `4px solid ${colors.gold}`, zIndex: 0 
+        borderBottom: `4px solid ${colors.gold}`, zIndex: 0
       }}>
         <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(12, 35, 64, 0.85)' }}></div>
       </div>
 
       <div style={{ position: 'relative', zIndex: 1, padding: '24px 20px 40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        
+
         <div className="top-nav">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: 'rgba(16, 185, 129, 0.15)', padding: '8px 14px', borderRadius: '10px', border: `1px solid rgba(16, 185, 129, 0.3)` }}>
-            <UserCheck size={18} color={colors.success} /> 
+            <UserCheck size={18} color={colors.success} />
             <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
               <span className="desktop-only" style={{ color: '#A7F3D0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Authenticated as</span>
               <span className="mobile-only" style={{ color: '#A7F3D0', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Logged In</span>
@@ -237,7 +234,7 @@ export default function FeedbackForm({ navigate }) {
           </div>
 
           <button onClick={handleLogout} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: colors.white, padding: '10px 14px', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit' }} onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.8)'} onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}>
-            <LogOut size={16} /> 
+            <LogOut size={16} />
             <span className="desktop-only" style={{ fontSize: '13px', fontWeight: 600 }}>Secure Logout</span>
           </button>
         </div>
@@ -252,7 +249,7 @@ export default function FeedbackForm({ navigate }) {
         </div>
 
         <div style={{ width: '100%', maxWidth: '900px', backgroundColor: colors.white, borderRadius: '16px', boxShadow: '0 20px 50px rgba(0,0,0,0.15)', border: `1px solid ${colors.border}`, overflow: 'hidden' }}>
-          
+
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', padding: '24px 0', borderBottom: `1px solid ${colors.border}`, backgroundColor: '#FAFAFA' }}>
             {[1, 2, 3].map((num, idx) => (
               <React.Fragment key={num}>
@@ -263,7 +260,7 @@ export default function FeedbackForm({ navigate }) {
           </div>
 
           <div className="card-inner">
-            
+
             {/* --- STEP 1: FORM --- */}
             {step === 1 && status !== "signing" && (
               <div style={{ animation: 'fadeUp 0.4s ease' }}>
@@ -273,7 +270,7 @@ export default function FeedbackForm({ navigate }) {
                   <label style={{ fontSize: '12px', color: colors.navy, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '16px', letterSpacing: '0.05em' }}>
                     SELECT FOOD STALL <span style={{ color: colors.red }}>*</span>
                   </label>
-                  
+
                   {loadingStalls ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: colors.textMuted, fontSize: '14px', padding: '16px 0' }}>
                       <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} color={colors.navy} /> Loading available stalls...
@@ -302,7 +299,7 @@ export default function FeedbackForm({ navigate }) {
                 </div>
 
                 <div className="form-grid">
-                  
+
                   {/* Ratings Column */}
                   <div style={{ backgroundColor: colors.white, borderRadius: '12px', border: `1px solid ${colors.border}`, padding: '24px' }}>
                     <label style={{ fontSize: '12px', color: colors.navy, fontWeight: 700, display: 'block', marginBottom: '16px', letterSpacing: '0.05em' }}>CATEGORY SCORING</label>
@@ -315,14 +312,14 @@ export default function FeedbackForm({ navigate }) {
                               const isHovered = hoverRating.category === category && hoverRating.val >= star;
                               const isActive = ratings[category] >= star;
                               return (
-                                <Star 
-                                  key={star} size={22} 
-                                  onClick={() => handleRatingChange(category, star)} 
-                                  onMouseEnter={() => setHoverRating({ category, val: star })} 
-                                  onMouseLeave={() => setHoverRating({ category: '', val: 0 })} 
-                                  fill={isHovered || isActive ? colors.gold : 'transparent'} 
-                                  color={isHovered || isActive ? colors.gold : '#CBD5E1'} 
-                                  style={{ cursor: 'pointer', transition: 'transform 0.1s', transform: isHovered ? 'scale(1.15)' : 'scale(1)' }} 
+                                <Star
+                                  key={star} size={22}
+                                  onClick={() => handleRatingChange(category, star)}
+                                  onMouseEnter={() => setHoverRating({ category, val: star })}
+                                  onMouseLeave={() => setHoverRating({ category: '', val: 0 })}
+                                  fill={isHovered || isActive ? colors.gold : 'transparent'}
+                                  color={isHovered || isActive ? colors.gold : '#CBD5E1'}
+                                  style={{ cursor: 'pointer', transition: 'transform 0.1s', transform: isHovered ? 'scale(1.15)' : 'scale(1)' }}
                                 />
                               );
                             })}
@@ -336,8 +333,8 @@ export default function FeedbackForm({ navigate }) {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                     <div>
                       <label style={{ fontSize: '12px', color: colors.textMuted, fontWeight: 600, display: 'block', marginBottom: '8px', letterSpacing: '0.05em' }}>ADDITIONAL COMMENTS</label>
-                      <textarea 
-                        name="comment" placeholder="Tell us what you liked or how we can improve..." value={form.comment} onChange={handleChange} 
+                      <textarea
+                        name="comment" placeholder="Tell us what you liked or how we can improve..." value={form.comment} onChange={handleChange}
                         style={{ width: '100%', height: '140px', padding: '16px', fontSize: '15px', borderRadius: '8px', border: `1px solid ${colors.border}`, backgroundColor: colors.bg, resize: 'none', outline: 'none', color: colors.text, fontFamily: 'inherit', transition: 'border 0.2s', boxSizing: 'border-box' }}
                         onFocus={(e) => e.target.style.borderColor = colors.navy}
                         onBlur={(e) => e.target.style.borderColor = colors.border}
@@ -349,10 +346,10 @@ export default function FeedbackForm({ navigate }) {
                       <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} style={{ display: 'none' }} />
 
                       {!imagePreview ? (
-                        <div 
-                          onClick={() => fileInputRef.current.click()} 
-                          style={{ width: '100%', minHeight: '100px', padding: '24px', border: `2px dashed ${colors.border}`, borderRadius: '8px', backgroundColor: colors.bg, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.2s', boxSizing: 'border-box' }} 
-                          onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.navy} 
+                        <div
+                          onClick={() => fileInputRef.current.click()}
+                          style={{ width: '100%', minHeight: '100px', padding: '24px', border: `2px dashed ${colors.border}`, borderRadius: '8px', backgroundColor: colors.bg, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.2s', boxSizing: 'border-box' }}
+                          onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.navy}
                           onMouseLeave={(e) => e.currentTarget.style.borderColor = colors.border}
                         >
                           <UploadCloud size={24} color={colors.textMuted} />
@@ -374,16 +371,16 @@ export default function FeedbackForm({ navigate }) {
                   <button
                     type="button"
                     disabled={!selectedStall}
-                    style={{ 
-                      padding: '16px 40px', fontSize: '15px', fontWeight: 600, 
-                      backgroundColor: selectedStall ? colors.navy : '#94A3B8', 
-                      color: colors.white, border: 'none', borderRadius: '8px', 
-                      cursor: selectedStall ? 'pointer' : 'not-allowed', 
-                      transition: 'all 0.2s', boxShadow: selectedStall ? '0 4px 12px rgba(12, 35, 64, 0.2)' : 'none', 
-                      fontFamily: 'inherit', width: '100%', maxWidth: '300px' 
+                    style={{
+                      padding: '16px 40px', fontSize: '15px', fontWeight: 600,
+                      backgroundColor: selectedStall ? colors.navy : '#94A3B8',
+                      color: colors.white, border: 'none', borderRadius: '8px',
+                      cursor: selectedStall ? 'pointer' : 'not-allowed',
+                      transition: 'all 0.2s', boxShadow: selectedStall ? '0 4px 12px rgba(12, 35, 64, 0.2)' : 'none',
+                      fontFamily: 'inherit', width: '100%', maxWidth: '300px'
                     }}
-                    onMouseEnter={(e) => { if(selectedStall) { e.currentTarget.style.backgroundColor = '#17365C'; e.currentTarget.style.transform = 'translateY(-2px)'; } }}
-                    onMouseLeave={(e) => { if(selectedStall) { e.currentTarget.style.backgroundColor = colors.navy; e.currentTarget.style.transform = 'none'; } }}
+                    onMouseEnter={(e) => { if (selectedStall) { e.currentTarget.style.backgroundColor = '#17365C'; e.currentTarget.style.transform = 'translateY(-2px)'; } }}
+                    onMouseLeave={(e) => { if (selectedStall) { e.currentTarget.style.backgroundColor = colors.navy; e.currentTarget.style.transform = 'none'; } }}
                     onClick={() => { setErrorMessage(""); setStatus("idle"); setStep(2); }}
                   >
                     {selectedStall ? 'Continue to Review' : 'Select a Stall First'}
@@ -395,9 +392,9 @@ export default function FeedbackForm({ navigate }) {
             {/* --- STEP 2: REVIEW --- */}
             {step === 2 && status !== "signing" && status !== "success" && (
               <div style={{ animation: 'fadeUp 0.4s ease' }}>
-                
+
                 <div style={{ backgroundColor: colors.bg, borderRadius: '12px', padding: '24px', marginBottom: '32px', border: `1px solid ${colors.border}` }}>
-                  
+
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${colors.border}`, paddingBottom: '16px', marginBottom: '16px' }}>
                     <span style={{ fontSize: '12px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em' }}>SELECTED STALL</span>
                     <span style={{ fontWeight: 700, fontSize: '14px', color: colors.navy, display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -411,7 +408,7 @@ export default function FeedbackForm({ navigate }) {
                       <CheckCircle2 size={16} /> {user.full_name}
                     </span>
                   </div>
-                  
+
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${colors.border}`, paddingBottom: '16px', marginBottom: '16px' }}>
                     <span style={{ fontSize: '12px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em' }}>OVERALL SCORE</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -464,8 +461,8 @@ export default function FeedbackForm({ navigate }) {
                   >
                     Back to Edit
                   </button>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     style={{ flex: 1, maxWidth: '400px', padding: '16px', fontSize: '15px', fontWeight: 600, backgroundColor: colors.navy, color: colors.white, border: 'none', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(12, 35, 64, 0.2)', fontFamily: 'inherit' }}
                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#17365C'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = colors.navy; e.currentTarget.style.transform = 'none'; }}
@@ -496,16 +493,16 @@ export default function FeedbackForm({ navigate }) {
             {/* --- STEP 4: MODERN DIGITAL RECEIPT WITH COPY & SCREENSHOT UX --- */}
             {status === "success" && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 0', textAlign: 'center', animation: 'fadeUp 0.4s ease' }}>
-                
+
                 <div style={{ width: '70px', height: '70px', backgroundColor: '#D1FAE5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px', border: '4px solid #10B981' }}>
                   <ShieldCheck size={36} color="#10B981" />
                 </div>
-                
+
                 <h3 style={{ fontSize: '26px', fontWeight: 700, color: colors.navy, marginBottom: '8px', letterSpacing: '-0.02em' }}>Review Secured</h3>
                 <p style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '24px', maxWidth: '400px', lineHeight: 1.6 }}>
                   Your feedback for <strong>{selectedStall}</strong> is now mathematically sealed in the database.
                 </p>
-                
+
                 <div style={{ width: '100%', maxWidth: '440px', backgroundColor: colors.bg, border: `1px solid ${colors.border}`, borderRadius: '12px', padding: '20px', marginBottom: '24px', textAlign: 'left' }}>
                   <label style={{ fontSize: '11px', color: colors.textMuted, fontWeight: 700, display: 'block', marginBottom: '8px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                     YOUR ED25519 RECEIPT SIGNATURE
@@ -513,9 +510,9 @@ export default function FeedbackForm({ navigate }) {
                   <div style={{ fontFamily: 'monospace', fontSize: '13px', color: colors.navy, backgroundColor: colors.white, padding: '12px', borderRadius: '6px', border: `1px solid ${colors.border}`, wordBreak: 'break-all', marginBottom: '12px', lineHeight: 1.4 }}>
                     {receiptData?.signature || 'Generating...'}
                   </div>
-                  
+
                   <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    <button 
+                    <button
                       onClick={copyToClipboard}
                       style={{ flex: 1, padding: '12px', fontSize: '14px', fontWeight: 600, backgroundColor: copied ? colors.success : colors.white, color: copied ? colors.white : colors.text, border: `1px solid ${copied ? colors.success : colors.border}`, borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'all 0.2s', fontFamily: 'inherit' }}
                     >
@@ -526,8 +523,8 @@ export default function FeedbackForm({ navigate }) {
                     📸 Tip: Take a screenshot of this page for your records.
                   </p>
                 </div>
-                
-                <button 
+
+                <button
                   type="button"
                   onClick={handleLogout}
                   style={{ width: '100%', maxWidth: '440px', padding: '16px', fontSize: '15px', fontWeight: 600, backgroundColor: colors.navy, color: colors.white, border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background-color 0.2s', fontFamily: 'inherit' }}
