@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import { submitFeedback, fetchStalls } from "../api"; // 👈 Added fetchStalls
-import { Star, CheckCircle2, Loader2, Lock, ShieldCheck, UploadCloud, Image as ImageIcon, X, Copy, LogOut, UserCheck, Store } from 'lucide-react';
+import { submitFeedback, fetchStalls } from "../api";
+import { Star, CheckCircle2, Loader2, Lock, ShieldCheck, UploadCloud, Image as ImageIcon, X, Copy, LogOut, UserCheck, Store, ArrowRight, ArrowLeft } from 'lucide-react';
 
 // Client-Side Cryptography
 import naclUtil from 'tweetnacl-util';
@@ -13,7 +13,6 @@ export default function FeedbackForm({ navigate }) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({ comment: "" });
 
-  // 👈 NEW: Dynamic Stall State
   const [selectedStall, setSelectedStall] = useState("");
   const [availableStalls, setAvailableStalls] = useState([]);
   const [loadingStalls, setLoadingStalls] = useState(true);
@@ -48,11 +47,10 @@ export default function FeedbackForm({ navigate }) {
         setLoadingStalls(true);
         const data = await fetchStalls();
         if (data && Array.isArray(data)) {
-          const formattedStalls = data.map(s => s.name);
-          setAvailableStalls(formattedStalls);
-          
-          // 👉 NEW: If there are no stalls, default to General Feedback
-          if (formattedStalls.length === 0) {
+          // 👉 Keep the full objects so we have access to stall.image later!
+          setAvailableStalls(data);
+
+          if (data.length === 0) {
             setSelectedStall("General Feedback");
           }
         }
@@ -120,10 +118,10 @@ export default function FeedbackForm({ navigate }) {
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
+    setStep(4); // Move progress bar to final step
     setStatus("signing");
     setSignMessage("Initializing Ed25519 Curve...");
 
-    // Securely bake the selected stall into the payload text
     const payloadText = `[Stall: ${selectedStall}] [Scores -> Food: ${ratings.Food}/5 | Service: ${ratings.Service}/5 | Staff: ${ratings.Staff}/5 | Clean: ${ratings.Cleanliness}/5 | Value: ${ratings.Value}/5]\n\n${form.comment}`;
 
     const payload = {
@@ -164,10 +162,10 @@ export default function FeedbackForm({ navigate }) {
       });
 
       setStatus("success");
-      setStep(3);
     } catch (err) {
       setStatus("error");
       setErrorMessage(err.message);
+      setStep(3); // Send them back to Review if there's an error
     }
   };
 
@@ -256,59 +254,170 @@ export default function FeedbackForm({ navigate }) {
         <div style={{ width: '100%', maxWidth: '900px', backgroundColor: colors.white, borderRadius: '16px', boxShadow: '0 20px 50px rgba(0,0,0,0.15)', border: `1px solid ${colors.border}`, overflow: 'hidden' }}>
 
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', padding: '24px 0', borderBottom: `1px solid ${colors.border}`, backgroundColor: '#FAFAFA' }}>
-            {[1, 2, 3].map((num, idx) => (
+            {[1, 2, 3, 4].map((num, idx) => (
               <React.Fragment key={num}>
                 <div style={{ width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 600, transition: 'all 0.3s', border: `2px solid ${step >= num ? colors.navy : colors.border}`, color: step >= num ? (step === num ? colors.white : colors.navy) : '#94A3B8', backgroundColor: step === num ? colors.navy : colors.white }}>{num}</div>
-                {idx < 2 && <div style={{ width: '40px', height: '2px', backgroundColor: step > num ? colors.navy : colors.border, transition: 'all 0.3s' }}></div>}
+                {idx < 3 && <div style={{ width: '40px', height: '2px', backgroundColor: step > num ? colors.navy : colors.border, transition: 'all 0.3s' }}></div>}
               </React.Fragment>
             ))}
           </div>
 
           <div className="card-inner">
 
-            {/* --- STEP 1: FORM --- */}
+            {/* --- STEP 1: SELECT LOCATION --- */}
             {step === 1 && status !== "signing" && (
               <div style={{ animation: 'fadeUp 0.4s ease' }}>
+                <div style={{ textAlign: 'center', marginBottom: '36px' }}>
+                  <h2 style={{ fontSize: '26px', fontWeight: 800, color: colors.navy, margin: '0 0 10px 0', letterSpacing: '-0.02em' }}>Where did you eat?</h2>
+                  <p style={{ color: colors.textMuted, fontSize: '16px', margin: 0 }}>Select the food stall you would like to review to begin.</p>
+                </div>
 
-                {/* DYNAMIC STALL SELECTION UI */}
-                <div style={{ backgroundColor: colors.white, borderRadius: '12px', border: `1px solid ${colors.border}`, padding: '24px', marginBottom: '24px' }}>
-                  <label style={{ fontSize: '12px', color: colors.navy, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '16px', letterSpacing: '0.05em' }}>
-                    SELECT FOOD STALL <span style={{ color: colors.red }}>*</span>
-                  </label>
-
+                <div style={{ marginBottom: '48px' }}>
                   {loadingStalls ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: colors.textMuted, fontSize: '14px', padding: '16px 0' }}>
-                      <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} color={colors.navy} /> Loading available stalls...
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: colors.textMuted, fontSize: '15px', padding: '40px 0', justifyContent: 'center', backgroundColor: colors.bg, borderRadius: '16px' }}>
+                      <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} color={colors.navy} /> Loading available stalls...
                     </div>
                   ) : availableStalls.length === 0 ? (
-                    // 👉 NEW: Message shown when no stalls exist
-                    <div style={{ padding: '16px', backgroundColor: colors.bg, borderRadius: '8px', border: `1px dashed ${colors.border}`, color: colors.textMuted, fontSize: '14px', fontStyle: 'italic', marginBottom: '16px' }}>
-                      No specific stalls are listed right now. Your review will be submitted as <strong style={{ color: colors.navy }}>General Feedback</strong>.
+                    <div style={{ padding: '40px', backgroundColor: colors.bg, borderRadius: '16px', border: `2px dashed ${colors.border}`, color: colors.textMuted, fontSize: '16px', textAlign: 'center' }}>
+                      <Store size={40} color="#CBD5E1" style={{ margin: '0 auto 16px auto', display: 'block' }} />
+                      No specific stalls are listed right now.<br />Your review will be submitted as <strong style={{ color: colors.navy }}>General Feedback</strong>.
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-                      {availableStalls.map(stall => (
-                        <button
-                          key={stall}
-                          type="button"
-                          onClick={() => setSelectedStall(stall)}
-                          style={{
-                            padding: '10px 16px', fontSize: '14px', fontWeight: 600,
-                            backgroundColor: selectedStall === stall ? colors.navy : colors.white,
-                            color: selectedStall === stall ? colors.white : colors.text,
-                            border: `1px solid ${selectedStall === stall ? colors.navy : colors.border}`,
-                            borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit'
-                          }}
-                        >
-                          {stall}
-                        </button>
-                      ))}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', justifyContent: 'center' }}>
+                      {availableStalls.map((stall, index) => {
+                        const isSelected = selectedStall === stall.name;
+
+                        // A beautiful array of different food images for variety
+                        const fallbackImages = [
+                          "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=400&q=80", // BBQ
+                          "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=400&q=80", // Pizza
+                          "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80", // Healthy Bowl
+                          "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&q=80", // Pancakes
+                          "https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=400&q=80"  // Burger
+                        ];
+
+                        // Pick a unique placeholder based on the stall's position in the list
+                        const uniquePlaceholder = fallbackImages[index % fallbackImages.length];
+
+                        // 👉 Checks multiple possible database column names just in case!
+                        const stallImage = stall.image || stall.photo || stall.imageUrl || stall.attachment || uniquePlaceholder;
+
+                        return (
+                          <div
+                            key={stall.name}
+                            onClick={() => setSelectedStall(stall.name)}
+                            style={{
+                              width: '320px',
+                              backgroundColor: colors.white,
+                              borderRadius: '16px',
+                              overflow: 'hidden',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              boxShadow: isSelected ? `0 0 0 3px ${colors.navy}, 0 12px 24px rgba(12, 35, 64, 0.2)` : '0 4px 12px rgba(0,0,0,0.06)',
+                              transform: isSelected ? 'translateY(-4px)' : 'none',
+                              display: 'flex',
+                              flexDirection: 'column'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isSelected) {
+                                e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.1)';
+                                e.currentTarget.style.transform = 'translateY(-2px)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isSelected) {
+                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.06)';
+                                e.currentTarget.style.transform = 'none';
+                              }
+                            }}
+                          >
+                            {/* Card Image */}
+                            <div style={{
+                              height: '140px',
+                              width: '100%',
+                              backgroundImage: `url("${stallImage}")`,
+                              backgroundSize: 'cover',
+                              backgroundPosition: 'center',
+                              position: 'relative'
+                            }}>
+                              {isSelected && (
+                                <div style={{ position: 'absolute', top: '12px', right: '12px', backgroundColor: colors.white, borderRadius: '50%', padding: '2px', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+                                  <CheckCircle2 size={24} color={colors.navy} fill={colors.gold} />
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Card Body */}
+                            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: colors.text, lineHeight: 1.3, flex: 1, paddingRight: '12px' }}>
+                                  {stall.name}
+                                </h3>
+                                <div style={{ textAlign: 'right' }}>
+                                  <div style={{ fontSize: '12px', color: colors.textMuted, fontWeight: 500 }}>Services</div>
+                                  <div style={{ fontSize: '12px', color: '#10B981', fontWeight: 700 }}>Until 5PM</div>
+                                </div>
+                              </div>
+
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '24px' }}>
+                                <span style={{ padding: '6px 12px', backgroundColor: '#F8FAFC', borderRadius: '100px', fontSize: '11px', fontWeight: 500, color: colors.textMuted }}>Food Service</span>
+                                <span style={{ padding: '6px 12px', backgroundColor: '#F8FAFC', borderRadius: '100px', fontSize: '11px', fontWeight: 500, color: colors.textMuted }}>Beverages</span>
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '12px', marginTop: 'auto' }}>
+                                <button style={{
+                                  flex: 1, padding: '10px 0',
+                                  backgroundColor: isSelected ? colors.navy : '#1E40AF',
+                                  color: colors.white, border: 'none', borderRadius: '6px',
+                                  fontWeight: 600, fontSize: '13px', cursor: 'pointer',
+                                  transition: 'all 0.2s'
+                                }}>
+                                  {isSelected ? 'Selected' : 'Select Stall'}
+                                </button>
+                              </div>
+
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
 
-                <div className="form-grid">
+                <div style={{ display: 'flex', justifyContent: 'center', borderTop: `1px solid ${colors.border}`, paddingTop: '32px' }}>
+                  <button
+                    type="button"
+                    disabled={!selectedStall}
+                    style={{
+                      padding: '16px 48px', fontSize: '16px', fontWeight: 600,
+                      backgroundColor: selectedStall ? colors.navy : '#94A3B8',
+                      color: colors.white, border: 'none', borderRadius: '12px',
+                      cursor: selectedStall ? 'pointer' : 'not-allowed',
+                      transition: 'all 0.25s ease',
+                      boxShadow: selectedStall ? '0 8px 20px rgba(12, 35, 64, 0.25)' : 'none',
+                      fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '10px',
+                      transform: selectedStall ? 'translateY(0)' : 'none'
+                    }}
+                    onMouseEnter={(e) => { if (selectedStall) { e.currentTarget.style.backgroundColor = '#17365C'; e.currentTarget.style.transform = 'translateY(-2px)'; } }}
+                    onMouseLeave={(e) => { if (selectedStall) { e.currentTarget.style.backgroundColor = colors.navy; e.currentTarget.style.transform = 'translateY(0)'; } }}
+                    onClick={() => setStep(2)}
+                  >
+                    Continue to Ratings <ArrowRight size={20} />
+                  </button>
+                </div>
+              </div>
+            )}
 
+            {/* --- STEP 2: RATING & COMMENTS --- */}
+            {step === 2 && status !== "signing" && (
+              <div style={{ animation: 'fadeUp 0.4s ease' }}>
+                <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+                  <h2 style={{ fontSize: '22px', fontWeight: 700, color: colors.navy, margin: '0 0 8px 0' }}>Share your thoughts</h2>
+                  <p style={{ color: colors.textMuted, fontSize: '15px', margin: 0 }}>Reviewing: <strong style={{ color: colors.navy }}>{selectedStall}</strong></p>
+                </div>
+
+                <div className="form-grid">
                   {/* Ratings Column */}
                   <div style={{ backgroundColor: colors.white, borderRadius: '12px', border: `1px solid ${colors.border}`, padding: '24px' }}>
                     <label style={{ fontSize: '12px', color: colors.navy, fontWeight: 700, display: 'block', marginBottom: '16px', letterSpacing: '0.05em' }}>CATEGORY SCORING</label>
@@ -376,31 +485,36 @@ export default function FeedbackForm({ navigate }) {
                   </div>
                 </div>
 
-                <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'flex-end' }}>
+                <div className="action-buttons" style={{ marginTop: '32px' }}>
                   <button
                     type="button"
-                    disabled={!selectedStall}
-                    style={{
-                      padding: '16px 40px', fontSize: '15px', fontWeight: 600,
-                      backgroundColor: selectedStall ? colors.navy : '#94A3B8',
-                      color: colors.white, border: 'none', borderRadius: '8px',
-                      cursor: selectedStall ? 'pointer' : 'not-allowed',
-                      transition: 'all 0.2s', boxShadow: selectedStall ? '0 4px 12px rgba(12, 35, 64, 0.2)' : 'none',
-                      fontFamily: 'inherit', width: '100%', maxWidth: '300px'
-                    }}
-                    onMouseEnter={(e) => { if (selectedStall) { e.currentTarget.style.backgroundColor = '#17365C'; e.currentTarget.style.transform = 'translateY(-2px)'; } }}
-                    onMouseLeave={(e) => { if (selectedStall) { e.currentTarget.style.backgroundColor = colors.navy; e.currentTarget.style.transform = 'none'; } }}
-                    onClick={() => { setErrorMessage(""); setStatus("idle"); setStep(2); }}
+                    style={{ padding: '16px 32px', fontSize: '15px', fontWeight: 600, backgroundColor: colors.white, color: colors.text, border: `1px solid ${colors.border}`, borderRadius: '8px', cursor: 'pointer', transition: 'background-color 0.2s', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.bg}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = colors.white}
+                    onClick={() => setStep(1)}
                   >
-                    {selectedStall ? 'Continue to Review' : 'Select a Stall First'}
+                    <ArrowLeft size={18} /> Back
+                  </button>
+                  <button
+                    type="button"
+                    style={{ padding: '16px 40px', fontSize: '15px', fontWeight: 600, backgroundColor: colors.navy, color: colors.white, border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(12, 35, 64, 0.2)', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#17365C'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = colors.navy; e.currentTarget.style.transform = 'none'; }}
+                    onClick={() => { setErrorMessage(""); setStatus("idle"); setStep(3); }}
+                  >
+                    Review Feedback <ArrowRight size={18} />
                   </button>
                 </div>
               </div>
             )}
 
-            {/* --- STEP 2: REVIEW --- */}
-            {step === 2 && status !== "signing" && status !== "success" && (
+            {/* --- STEP 3: REVIEW --- */}
+            {step === 3 && status !== "signing" && status !== "success" && (
               <div style={{ animation: 'fadeUp 0.4s ease' }}>
+                <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+                  <h2 style={{ fontSize: '22px', fontWeight: 700, color: colors.navy, margin: '0 0 8px 0' }}>Verify your submission</h2>
+                  <p style={{ color: colors.textMuted, fontSize: '15px', margin: 0 }}>Please check your details before we cryptographically seal them.</p>
+                </div>
 
                 <div style={{ backgroundColor: colors.bg, borderRadius: '12px', padding: '24px', marginBottom: '32px', border: `1px solid ${colors.border}` }}>
 
@@ -463,12 +577,12 @@ export default function FeedbackForm({ navigate }) {
                 <div className="action-buttons">
                   <button
                     type="button"
-                    style={{ padding: '16px 32px', fontSize: '15px', fontWeight: 600, backgroundColor: colors.white, color: colors.text, border: `1px solid ${colors.border}`, borderRadius: '8px', cursor: 'pointer', transition: 'background-color 0.2s', fontFamily: 'inherit' }}
+                    style={{ padding: '16px 32px', fontSize: '15px', fontWeight: 600, backgroundColor: colors.white, color: colors.text, border: `1px solid ${colors.border}`, borderRadius: '8px', cursor: 'pointer', transition: 'background-color 0.2s', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '8px' }}
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.bg}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = colors.white}
-                    onClick={() => { setStatus("idle"); setErrorMessage(""); setStep(1); }}
+                    onClick={() => { setStatus("idle"); setErrorMessage(""); setStep(2); }}
                   >
-                    Back to Edit
+                    <ArrowLeft size={18} /> Back to Edit
                   </button>
                   <button
                     type="button"
@@ -483,7 +597,7 @@ export default function FeedbackForm({ navigate }) {
               </div>
             )}
 
-            {/* --- STEP 3: CRYPTO ANIMATION --- */}
+            {/* --- STEP 4: CRYPTO ANIMATION --- */}
             {status === "signing" && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', textAlign: 'center', animation: 'fadeUp 0.4s ease' }}>
                 <Loader2 size={48} color={colors.navy} style={{ animation: 'spin 1.5s linear infinite', marginBottom: '24px' }} />

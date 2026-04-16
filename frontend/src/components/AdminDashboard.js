@@ -209,13 +209,17 @@ export default function AdminDashboard({ navigate }) {
   };
 
   const exportToCSV = () => {
-    const headers = ["ID,Date,Time,Customer Name,Rating,Ed25519 Signature,Public Key,Integrity Check,Tamper Detected At"];
+    const headers = ["ID,Date,Time,Customer Name,Stall,Rating,Ed25519 Signature,Public Key,Integrity Check,Tamper Detected At"];
     const rows = feedbacks.map(f => {
       const state = verifyState[f.id] || {};
       const status = state.status === 'valid' ? 'Authentic' : (state.status === 'invalid' ? 'TAMPERED' : 'Pending');
       const tamperTime = state.tamperTime || 'N/A';
       const dateStr = f.created_at ? new Date(f.created_at).toLocaleString() : 'N/A';
-      return `${f.id},${dateStr},"${f.customer_name || 'Anonymous'}",${f.rating},${f.signature},${f.public_key},${status},${tamperTime}`;
+      
+      const stallMatch = f.comment?.match(/\[Stall: (.*?)\]/);
+      const stallName = stallMatch ? stallMatch[1] : 'General';
+
+      return `${f.id},${dateStr},"${f.customer_name || 'Anonymous'}","${stallName}",${f.rating},${f.signature},${f.public_key},${status},${tamperTime}`;
     });
     const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n");
     const encodedUri = encodeURI(csvContent);
@@ -227,17 +231,26 @@ export default function AdminDashboard({ navigate }) {
     link.remove();
   };
 
-  const parseFeedbackData = (text) => {
-    if (!text) return { metrics: null, text: "No comment provided." };
+    const parseFeedbackData = (text) => {
+    if (!text) return { stall: null, metrics: null, text: "No comment provided." };
+    
+    // Extract the stall name we baked into the text
+    let stallName = "General Feedback";
+    const stallMatch = text.match(/\[Stall: (.*?)\]/);
+    if (stallMatch) {
+      stallName = stallMatch[1];
+    }
+
     const match = text.match(/\[Scores -> Food: (\d)\/5 \| Service: (\d)\/5 \| Staff: (\d)\/5 \| Clean: (\d)\/5 \| Value: (\d)\/5\]/);
     if (match) {
       const parts = text.split('\n\n');
       return {
+        stall: stallName,
         metrics: { Food: match[1], Service: match[2], Staff: match[3], Cleanliness: match[4], Value: match[5] },
         text: parts.slice(1).join('\n\n').trim() || "No written comment provided."
       };
     }
-    return { metrics: null, text: text };
+    return { stall: stallName, metrics: null, text: text };
   };
 
   const formatPrecisionDate = (dateString) => {
@@ -548,7 +561,8 @@ export default function AdminDashboard({ navigate }) {
                         <td style={{ padding: '20px 12px', color: colors.text, fontSize: '15px', fontWeight: 600 }}>{f.customer_name || 'Anonymous'}</td>
 
                         <td style={{ padding: '20px 12px', fontSize: '14px', color: colors.textMuted, lineHeight: 1.5 }}>
-                          {parsed.metrics ? <span style={{ color: colors.navy, fontWeight: 600, backgroundColor: '#F1F5F9', padding: '2px 8px', borderRadius: '4px' }}>[Multi-Category Entry]</span> : `"${parsed.text.substring(0, 45)}..."`}
+                          {parsed.stall && <span style={{ color: colors.navy, fontWeight: 600, backgroundColor: '#F1F5F9', padding: '4px 10px', borderRadius: '6px', marginRight: '8px' }}>{parsed.stall}</span>}
+                          {parsed.metrics && <span style={{ fontSize: '12px', color: colors.textMuted }}>Metrics</span>}
                           {f.has_attachment && <span style={{ fontSize: '11px', color: colors.success, fontWeight: 700, marginLeft: '8px', border: `1px solid ${colors.success}`, padding: '2px 6px', borderRadius: '4px' }}>[PHOTO]</span>}
                         </td>
 
@@ -719,7 +733,8 @@ export default function AdminDashboard({ navigate }) {
                         <td style={{ padding: '20px 12px', color: colors.text, fontSize: '15px', fontWeight: 600 }}>{f.customer_name || 'Anonymous'}</td>
 
                         <td style={{ padding: '20px 12px', fontSize: '14px', color: colors.textMuted, lineHeight: 1.5 }}>
-                          {parsed.metrics ? <span style={{ color: '#991B1B', fontWeight: 600, backgroundColor: '#FEE2E2', padding: '2px 8px', borderRadius: '4px' }}>[Multi-Category Entry]</span> : `"${parsed.text.substring(0, 45)}..."`}
+                          {parsed.stall && <span style={{ color: '#991B1B', fontWeight: 600, backgroundColor: '#FEE2E2', padding: '4px 10px', borderRadius: '6px', marginRight: '8px' }}>{parsed.stall}</span>}
+                          {parsed.metrics && <span style={{ fontSize: '12px', color: colors.textMuted }}>Metrics</span>}
                           {f.has_attachment && <span style={{ fontSize: '11px', color: colors.danger, fontWeight: 700, marginLeft: '8px', border: `1px solid ${colors.danger}`, padding: '2px 6px', borderRadius: '4px' }}>[PHOTO]</span>}
                         </td>
 
@@ -751,6 +766,12 @@ export default function AdminDashboard({ navigate }) {
 
             <h2 style={{ fontSize: '24px', fontWeight: 700, color: colors.navy, margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>Feedback Report</h2>
             <p style={{ fontSize: '14px', color: colors.textMuted, margin: '0 0 32px 0' }}>ID #{selectedFeedback.id} • Submitted via EdDSA Portal</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${colors.border}`, paddingBottom: '16px', marginBottom: '16px' }}>
+              <span style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em' }}>STALL REVIEWED</span>
+              <span style={{ fontWeight: 700, color: colors.navy, fontSize: '15px', backgroundColor: '#F1F5F9', padding: '4px 12px', borderRadius: '6px' }}>
+                {parseFeedbackData(selectedFeedback.comment).stall || 'General Feedback'}
+              </span>
+            </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${colors.border}`, paddingBottom: '16px', marginBottom: '16px' }}>
               <span style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em' }}>CUSTOMER NAME</span>

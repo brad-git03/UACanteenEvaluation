@@ -36,12 +36,15 @@ async function initDB() {
         await pool.query(`ALTER TABLE feedbacks ADD COLUMN IF NOT EXISTS is_quarantined BOOLEAN DEFAULT FALSE;`);
         await pool.query(`ALTER TABLE feedbacks ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
 
-        await pool.query(`
+         await pool.query(`
             CREATE TABLE IF NOT EXISTS stalls (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(100) UNIQUE NOT NULL
             );
         `);
+        
+        // 👉 NEW: Add the image column to the database!
+        await pool.query(`ALTER TABLE stalls ADD COLUMN IF NOT EXISTS image TEXT;`);
 
         console.log("✅ Database initialized: 'users', 'feedbacks', and 'stalls' tables are ready.");
     } catch (err) {
@@ -96,8 +99,15 @@ async function getAllStalls() {
     return result.rows;
 }
 
-async function addStall(name) {
-    const result = await pool.query(`INSERT INTO stalls (name) VALUES ($1) RETURNING *`, [name]);
+// 👉 NEW: Now saves the image!
+async function addStall(name, image) {
+    const result = await pool.query(`INSERT INTO stalls (name, image) VALUES ($1, $2) RETURNING *`, [name, image]);
+    return result.rows[0];
+}
+
+// 👉 NEW: Function for the Edit feature!
+async function editStall(id, name, image) {
+    const result = await pool.query(`UPDATE stalls SET name = $1, image = $2 WHERE id = $3 RETURNING *`, [name, image, id]);
     return result.rows[0];
 }
 
@@ -108,5 +118,5 @@ async function deleteStall(id) {
 module.exports = {
     pool, addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback,
     tamperFeedback, getLightFeedbacks, getFeedbackPhoto,
-    getAllStalls, addStall, deleteStall
+    getAllStalls, addStall, editStall, deleteStall
 };

@@ -53,17 +53,15 @@ export const submitFeedback = async (payload) => {
 
 export const fetchStalls = async () => {
     const response = await fetch(`${API_URL}/stalls`);
-    if (!response.ok) {
-        throw new Error('Failed to fetch stalls');
-    }
+    if (!response.ok) throw new Error('Failed to fetch stalls');
     return response.json();
 };
 
-export const addStall = async (name) => {
+export const addStall = async (name, image) => {
     const response = await fetch(`${API_URL}/stalls`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
+        body: JSON.stringify({ name, image })
     });
     if (!response.ok) {
         const err = await response.json();
@@ -72,11 +70,22 @@ export const addStall = async (name) => {
     return response.json();
 };
 
+export const editStall = async (id, name, image) => {
+    const response = await fetch(`${API_URL}/stalls/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, image })
+    });
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to edit stall');
+    }
+    return response.json();
+};
+
 export const deleteStall = async (id) => {
     const response = await fetch(`${API_URL}/stalls/${id}`, { method: 'DELETE' });
-    if (!response.ok) {
-        throw new Error('Failed to delete stall');
-    }
+    if (!response.ok) throw new Error('Failed to delete stall');
     return response.json();
 };
 
