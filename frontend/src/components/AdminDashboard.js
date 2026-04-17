@@ -20,7 +20,6 @@ export default function AdminDashboard({ navigate }) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
-<<<<<<< HEAD
   // 👉 NEW: Role-Based Access Control (Admin vs Viewer)
   const [userRole, setUserRole] = useState('admin');
   const [userName, setUserName] = useState('UA Admin');
@@ -36,13 +35,11 @@ export default function AdminDashboard({ navigate }) {
         setUserRole(u.role || 'admin');
         setUserName(u.full_name || 'UA Admin');
       }
-    } catch(e){}
+    } catch (e) { }
   }, []);
 
   // 👉 NEW: State for the Stall Filter dropdown
-=======
   // State for the Stall Filter dropdown
->>>>>>> 0254e67983e163876f07eee4956edd98d8119a74
   const [dashboardStallFilter, setDashboardStallFilter] = useState("All");
   const [stallsList, setStallsList] = useState([]);
 
@@ -129,13 +126,13 @@ export default function AdminDashboard({ navigate }) {
   const totalPages = Math.ceil(searchedFeedbacks.length / itemsPerPage);
 
   // Filter dashboard math based on the selected stall!
-  const dashboardFeedbacks = dashboardStallFilter === "All" 
-    ? safeFeedbacks 
+  const dashboardFeedbacks = dashboardStallFilter === "All"
+    ? safeFeedbacks
     : safeFeedbacks.filter(f => {
-        const stallMatch = f.comment?.match(/\[Stall: (.*?)\]/);
-        const stallName = stallMatch ? stallMatch[1] : 'General Feedback';
-        return stallName === dashboardStallFilter;
-      });
+      const stallMatch = f.comment?.match(/\[Stall: (.*?)\]/);
+      const stallName = stallMatch ? stallMatch[1] : 'General Feedback';
+      return stallName === dashboardStallFilter;
+    });
 
   // Math uses `dashboardFeedbacks` instead of `safeFeedbacks`
   const total = dashboardFeedbacks.length;
@@ -150,7 +147,7 @@ export default function AdminDashboard({ navigate }) {
     value: dashboardFeedbacks.filter(f => f.rating === star).length,
     percentage: total > 0 ? Number(((dashboardFeedbacks.filter(f => f.rating === star).length / total) * 100).toFixed(1)) : 0
   })).filter(d => d.value > 0);
-  
+
   const dominantRating = pieData.length > 0 ? pieData.reduce((best, current) => current.value > best.value ? current : best, pieData[0]) : { star: 'N/A' };
 
   const categoryTotals = { Food: 0, Service: 0, Staff: 0, Clean: 0, Value: 0 };
@@ -255,7 +252,7 @@ export default function AdminDashboard({ navigate }) {
       const status = state.status === 'valid' ? 'Authentic' : (state.status === 'invalid' ? 'TAMPERED' : 'Pending');
       const tamperTime = state.tamperTime || 'N/A';
       const dateStr = f.created_at ? new Date(f.created_at).toLocaleString() : 'N/A';
-      
+
       const stallMatch = f.comment?.match(/\[Stall: (.*?)\]/);
       const stallName = stallMatch ? stallMatch[1] : 'General';
 
@@ -274,7 +271,7 @@ export default function AdminDashboard({ navigate }) {
   // Extracts Stall Name from the comment
   const parseFeedbackData = (text) => {
     if (!text) return { stall: null, metrics: null, text: "No comment provided." };
-    
+
     let stallName = "General Feedback";
     const stallMatch = text.match(/\[Stall: (.*?)\]/);
     if (stallMatch) {
@@ -399,15 +396,15 @@ export default function AdminDashboard({ navigate }) {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <MenuItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
-          <MenuItem id="ranking" icon={Star} label="Rankings" /> 
+          <MenuItem id="ranking" icon={Star} label="Rankings" />
           <MenuItem id="records" icon={FileText} label="Safe Records" />
-          
+
           {userRole !== 'viewer' && (
-            <MenuItem id="stalls" icon={Store} label="Manage Stalls" /> 
+            <MenuItem id="stalls" icon={Store} label="Manage Stalls" />
           )}
-          
+
           <MenuItem id="verify" icon={ShieldCheck} label="Crypto Logs" />
-          
+
           {userRole !== 'viewer' && (
             <>
               <div style={{ margin: '16px 0', borderTop: '1px solid rgba(255,255,255,0.1)' }}></div>
@@ -462,10 +459,10 @@ export default function AdminDashboard({ navigate }) {
             <div style={{ display: 'grid', gap: '16px' }}>
               {stallsList.map(stall => {
                 const stallFeedbacks = safeFeedbacks.filter(f => {
-                   const match = f.comment?.match(/\[Stall: (.*?)\]/);
-                   return match ? match[1] === stall.name : false;
+                  const match = f.comment?.match(/\[Stall: (.*?)\]/);
+                  return match ? match[1] === stall.name : false;
                 });
-                
+
                 let totalScore = 0;
                 let validCount = 0;
 
@@ -485,18 +482,18 @@ export default function AdminDashboard({ navigate }) {
                 });
 
                 const avg = validCount > 0 ? totalScore / validCount : 0;
-                
-                return { 
+
+                return {
                   id: stall.id,
-                  name: stall.name, 
+                  name: stall.name,
                   image: stall.image,
-                  avg: Number(avg.toFixed(2)), 
+                  avg: Number(avg.toFixed(2)),
                   total: stallFeedbacks.length,
                   validScoreCount: validCount
                 };
-              }).filter(s => s.total > 0).sort((a,b) => b.avg - a.avg).map((stall, idx) => (
+              }).filter(s => s.total > 0).sort((a, b) => b.avg - a.avg).map((stall, idx) => (
                 <div key={stall.name} style={{ display: 'flex', alignItems: 'center', padding: '20px 24px', backgroundColor: colors.white, borderRadius: '16px', border: `1px solid ${colors.border}`, boxShadow: '0 8px 20px rgba(0,0,0,0.03)', gap: '24px', position: 'relative', overflow: 'hidden', transition: 'transform 0.2s', cursor: 'default' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
-                  
+
                   {/* Rank Indicator */}
                   <div style={{ width: '48px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                     {idx === 0 && <Trophy size={32} color={colors.gold} style={{ filter: 'drop-shadow(0 2px 4px rgba(229,168,35,0.4))' }} />}
@@ -529,7 +526,7 @@ export default function AdminDashboard({ navigate }) {
                   </div>
 
                   {/* Action Button */}
-                  <button 
+                  <button
                     onClick={() => window.open(`http://localhost:4000/api/reports/stall/${stall.id}`, '_blank')}
                     style={{ background: 'transparent', border: `1px solid ${colors.border}`, color: colors.navy, padding: '10px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', marginRight: '16px' }}
                     onMouseEnter={e => { e.currentTarget.style.backgroundColor = colors.navy; e.currentTarget.style.color = colors.white; }}
@@ -543,7 +540,7 @@ export default function AdminDashboard({ navigate }) {
                     <div style={{ fontSize: '32px', fontWeight: 800, color: colors.navy, display: 'flex', alignItems: 'baseline', gap: '4px', letterSpacing: '-0.02em', lineHeight: 1 }}>
                       {stall.avg.toFixed(1)} <span style={{ fontSize: '16px', color: colors.textMuted, fontWeight: 600 }}>/ 5</span>
                     </div>
-                    
+
                     <div style={{ width: '100%', height: '6px', backgroundColor: colors.bg, borderRadius: '4px', marginTop: '8px', overflow: 'hidden' }}>
                       <div style={{ width: `${(stall.avg / 5) * 100}%`, height: '100%', backgroundColor: colors.gold, borderRadius: '4px', transition: 'width 1s ease' }}></div>
                     </div>
@@ -568,7 +565,7 @@ export default function AdminDashboard({ navigate }) {
                 Add or remove food stalls for the student feedback form.
               </p>
             </div>
-            
+
             <StallManager />
           </div>
         )}
@@ -611,12 +608,12 @@ export default function AdminDashboard({ navigate }) {
                     <option value="General Feedback">General Feedback</option>
                   </select>
                 </div>
-                
+
                 {/* 👉 NEW: PDF Download Button connected to reportGenerator! */}
-                <button 
+                <button
                   onClick={handleDownloadReport}
                   style={{ backgroundColor: colors.navy, color: colors.white, border: 'none', padding: '12px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'background-color 0.2s', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
-                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#17365C'} 
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#17365C'}
                   onMouseLeave={e => e.currentTarget.style.backgroundColor = colors.navy}
                 >
                   <Download size={18} />
