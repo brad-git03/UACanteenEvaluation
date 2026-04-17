@@ -50,7 +50,19 @@ export default function FeedbackForm({ navigate }) {
           // 👉 Keep the full objects so we have access to stall.image later!
           setAvailableStalls(data);
 
-          if (data.length === 0) {
+          // 👉 NEW: QR AUTO-ROUTING LOGIC
+          const params = new URLSearchParams(window.location.search);
+          const autoStall = params.get('stall');
+          
+          if (autoStall) {
+             const matched = data.find(s => s.name.toLowerCase() === autoStall.toLowerCase());
+             if (matched) {
+                setSelectedStall(matched.name);
+                setStep(2); // 🔥 Instantly skip step 1 for QR code users to maximize UX speed!
+             } else {
+               setSelectedStall("General Feedback");
+             }
+          } else if (data.length === 0) {
             setSelectedStall("General Feedback");
           }
         }

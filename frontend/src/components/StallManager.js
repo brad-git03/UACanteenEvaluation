@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { fetchStalls, addStall, editStall, deleteStall } from '../api';
-import { Store, Plus, Trash2, Loader2, AlertCircle, Image as ImageIcon, X, Edit3, Save } from 'lucide-react';
+import { Store, Plus, Trash2, Loader2, AlertCircle, Image as ImageIcon, X, Edit3, Save, QrCode } from 'lucide-react';
 
 export default function StallManager() {
   const [stalls, setStalls] = useState([]);
@@ -73,7 +73,7 @@ export default function StallManager() {
         setStalls([...stalls, newStall]);
       }
       
-      cancelEdit();
+      handleCancelEdit();
       setError("");
     } catch (err) {
       setError(err.message || "Operation failed.");
@@ -87,17 +87,45 @@ export default function StallManager() {
     window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll up to the form
   };
 
-  const cancelEdit = () => {
+  const handleCancelEdit = () => {
     setEditingStallId(null);
     setNewName("");
     setNewImage(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    if(fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleDownloadQR = (stallName) => {
+    try {
+      const safeStallName = encodeURIComponent(stallName);
+      // Hardcode localhost base for development (or process.env in production)
+      const targetUrl = `http://localhost:3000/?stall=${safeStallName}`;
+      
+      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(targetUrl)}&margin=20`;
+      
+      // Fetch the binary data, convert to a Blob so we can force a raw download instead of bouncing the browser tab
+      fetch(qrApiUrl)
+        .then(res => res.blob())
+        .then(blob => {
+           const url = window.URL.createObjectURL(blob);
+           const a = document.createElement('a');
+           a.style.display = 'none';
+           a.href = url;
+           a.download = `QR_${stallName.replace(/\s+/g, '_')}.png`;
+           document.body.appendChild(a);
+           a.click();
+           window.URL.revokeObjectURL(url);
+           document.body.removeChild(a);
+        })
+        .catch(err => {
+           alert("Failed to generated QR. Ensure you have an active internet connection.");
+        });
+    } catch(e) {}
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to remove this stall?")) return;
     try {
-      if (editingStallId === id) cancelEdit();
+      if (editingStallId === id) handleCancelEdit();
       await deleteStall(id);
       setStalls(stalls.filter(s => s.id !== id));
       setError("");
@@ -107,16 +135,19 @@ export default function StallManager() {
   };
 
   return (
-    <div style={{ backgroundColor: colors.white, borderRadius: '16px', padding: '32px', border: `1px solid ${colors.border}`, boxShadow: '0 10px 25px rgba(0,0,0,0.05)', maxWidth: '700px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px', borderBottom: `1px solid ${colors.border}`, paddingBottom: '20px' }}>
-        <div style={{ backgroundColor: 'rgba(12, 35, 64, 0.05)', padding: '12px', borderRadius: '12px' }}>
-          <Store size={28} color={colors.navy} />
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', alignItems: 'start' }}>
+      
+      {/* ─── LEFT COLUMN: FORM ─── */}
+      <div style={{ backgroundColor: colors.white, borderRadius: '16px', padding: '32px', border: `1px solid ${colors.border}`, boxShadow: '0 4px 15px rgba(0,0,0,0.03)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', borderBottom: `1px solid ${colors.border}`, paddingBottom: '20px' }}>
+          <div style={{ backgroundColor: 'rgba(12, 35, 64, 0.05)', padding: '12px', borderRadius: '12px' }}>
+            <Store size={28} color={colors.navy} />
+          </div>
+          <div>
+            <h2 style={{ margin: '0 0 4px 0', fontSize: '22px', color: colors.navy, fontWeight: 800, letterSpacing: '-0.02em' }}>Stall Configurator</h2>
+            <p style={{ margin: 0, fontSize: '14px', color: colors.textMuted }}>Add or edit individual food stalls.</p>
+          </div>
         </div>
-        <div>
-          <h2 style={{ margin: '0 0 4px 0', fontSize: '22px', color: colors.navy, fontWeight: 800, letterSpacing: '-0.02em' }}>Stall Manager</h2>
-          <p style={{ margin: 0, fontSize: '14px', color: colors.textMuted }}>Add, edit, or remove food stalls and cover photos.</p>
-        </div>
-      </div>
 
       {error && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#FEF2F2', color: colors.red, padding: '16px', borderRadius: '8px', marginBottom: '24px', fontSize: '14px', fontWeight: 500, border: '1px solid #FECACA' }}>
@@ -124,14 +155,14 @@ export default function StallManager() {
         </div>
       )}
 
-      {/* Form */}
-      <div style={{ backgroundColor: editingStallId ? '#F0F9FF' : colors.bg, padding: '24px', borderRadius: '12px', border: `1px solid ${editingStallId ? '#BAE6FD' : colors.border}`, marginBottom: '40px', transition: 'all 0.3s' }}>
+      {/* Form Context */}
+      <div style={{ backgroundColor: editingStallId ? '#F0F9FF' : colors.bg, padding: '24px', borderRadius: '12px', border: `1px solid ${editingStallId ? '#BAE6FD' : colors.border}`, transition: 'all 0.3s' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h3 style={{ fontSize: '13px', fontWeight: 700, color: editingStallId ? colors.blue : colors.textMuted, letterSpacing: '0.05em', margin: 0 }}>
             {editingStallId ? 'EDITING STALL' : 'ADD NEW STALL'}
           </h3>
           {editingStallId && (
-            <button onClick={cancelEdit} style={{ background: 'none', border: 'none', color: colors.textMuted, cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>Cancel Edit</button>
+            <button onClick={handleCancelEdit} style={{ background: 'none', border: 'none', color: colors.textMuted, cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>Cancel Edit</button>
           )}
         </div>
         
@@ -181,12 +212,13 @@ export default function StallManager() {
           </button>
         </form>
       </div>
+      </div>
 
-      {/* Stall List */}
-      <div>
-        <h3 style={{ fontSize: '13px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.05em', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          ACTIVE STALLS 
-          <span style={{ backgroundColor: colors.bg, padding: '2px 8px', borderRadius: '12px', fontSize: '12px', color: colors.navy }}>{stalls.length} Total</span>
+      {/* ─── RIGHT COLUMN: ACTIVE STALLS ─── */}
+      <div style={{ backgroundColor: colors.white, borderRadius: '16px', padding: '32px', border: `1px solid ${colors.border}`, boxShadow: '0 4px 15px rgba(0,0,0,0.03)' }}>
+        <h3 style={{ fontSize: '14px', fontWeight: 700, color: colors.navy, letterSpacing: '0.05em', marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${colors.border}`, paddingBottom: '16px' }}>
+          ACTIVE STALLS DIRECTORY
+          <span style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', padding: '4px 10px', borderRadius: '12px', fontSize: '12px', color: colors.blue }}>{stalls.length} Total</span>
         </h3>
         
         {loading ? (
@@ -199,9 +231,9 @@ export default function StallManager() {
             No stalls found. Add one above!
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {stalls.map(stall => (
-              <div key={stall.id} style={{ display: 'flex', alignItems: 'center', padding: '12px', backgroundColor: colors.white, border: `1px solid ${editingStallId === stall.id ? colors.blue : colors.border}`, borderRadius: '12px', gap: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+              <div key={stall.id} style={{ display: 'flex', alignItems: 'center', padding: '16px', borderBottom: `1px solid ${colors.border}`, backgroundColor: editingStallId === stall.id ? '#F8FAFC' : 'transparent', gap: '16px', transition: 'background-color 0.2s' }} onMouseEnter={e => { if (editingStallId !== stall.id) e.currentTarget.style.backgroundColor = '#F8FAFC'; }} onMouseLeave={e => { if (editingStallId !== stall.id) e.currentTarget.style.backgroundColor = 'transparent'; }}>
                 <div style={{ width: '48px', height: '48px', borderRadius: '8px', backgroundColor: colors.bg, overflow: 'hidden', flexShrink: 0 }}>
                   {stall.image ? (
                     <img src={stall.image} alt={stall.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -215,6 +247,13 @@ export default function StallManager() {
                 <span style={{ fontWeight: 600, color: colors.text, fontSize: '15px', flex: 1 }}>{stall.name}</span>
                 
                 <div style={{ display: 'flex', gap: '6px' }}>
+                  <button 
+                    onClick={() => handleDownloadQR(stall.name)}
+                    style={{ background: '#FAF5FF', border: '1px solid #E9D5FF', color: '#9333EA', cursor: 'pointer', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}
+                    title="Download Auto-Routing QR Code"
+                  >
+                    <QrCode size={16} />
+                  </button>
                   <button 
                     onClick={() => handleEditClick(stall)}
                     style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', color: colors.blue, cursor: 'pointer', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}

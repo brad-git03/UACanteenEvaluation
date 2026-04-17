@@ -5,7 +5,7 @@ import {
   PieChart, Pie, Cell, Tooltip as PieTooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as BarTooltip
 } from 'recharts';
-import { Camera, LayoutDashboard, FileText, LogOut, ShieldCheck, X, Star, Key, Hash, ShieldAlert, Search, Download, AlertTriangle, Clock, Terminal, Trash2, ChevronLeft, ChevronRight, Loader2, Store } from 'lucide-react';
+import { Camera, LayoutDashboard, FileText, LogOut, ShieldCheck, X, Star, Key, Hash, ShieldAlert, Search, Download, AlertTriangle, Clock, Terminal, Trash2, ChevronLeft, ChevronRight, Loader2, Store, Trophy, Medal, Award, Users } from 'lucide-react';
 
 export default function AdminDashboard({ navigate }) {
   const [feedbacks, setFeedbacks] = useState([]);
@@ -19,6 +19,24 @@ export default function AdminDashboard({ navigate }) {
   const [traceStatus, setTraceStatus] = useState('loading');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
+
+  // 👉 NEW: Role-Based Access Control (Admin vs Viewer)
+  const [userRole, setUserRole] = useState('admin');
+  const [userName, setUserName] = useState('UA Admin');
+
+  // 👉 NEW: Ranking Filter
+  const [rankingFilter, setRankingFilter] = useState("Overall");
+
+  useEffect(() => {
+    try {
+      const userStr = localStorage.getItem('ua_user');
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        setUserRole(u.role || 'admin');
+        setUserName(u.full_name || 'UA Admin');
+      }
+    } catch(e){}
+  }, []);
 
   // 👉 NEW: State for the Stall Filter dropdown
   const [dashboardStallFilter, setDashboardStallFilter] = useState("All");
@@ -280,6 +298,16 @@ export default function AdminDashboard({ navigate }) {
     };
   };
 
+  // 👉 NEW: Download PDF Report logic
+  const handleDownloadReport = () => {
+    let url = 'http://localhost:4000/api/reports/overall';
+    if (dashboardStallFilter !== "All" && dashboardStallFilter !== "General Feedback") {
+      const stallObj = stallsList.find(s => s.name === dashboardStallFilter);
+      if (stallObj) url = `http://localhost:4000/api/reports/stall/${stallObj.id}`;
+    }
+    window.open(url, '_blank');
+  };
+
   // UI COMPONENTS
   const MenuItem = ({ id, icon: Icon, label, badge }) => {
     const isActive = activeMenu === id;
@@ -367,18 +395,30 @@ export default function AdminDashboard({ navigate }) {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <MenuItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
+          <MenuItem id="ranking" icon={Star} label="Rankings" /> 
           <MenuItem id="records" icon={FileText} label="Safe Records" />
-          <MenuItem id="stalls" icon={Store} label="Manage Stalls" /> 
+          
+          {userRole !== 'viewer' && (
+            <MenuItem id="stalls" icon={Store} label="Manage Stalls" /> 
+          )}
+          
           <MenuItem id="verify" icon={ShieldCheck} label="Crypto Logs" />
-          <div style={{ margin: '16px 0', borderTop: '1px solid rgba(255,255,255,0.1)' }}></div>
-          <MenuItem id="quarantine" icon={ShieldAlert} label="Quarantine" badge={activeBreachCount} />
+          
+          {userRole !== 'viewer' && (
+            <>
+              <div style={{ margin: '16px 0', borderTop: '1px solid rgba(255,255,255,0.1)' }}></div>
+              <MenuItem id="quarantine" icon={ShieldAlert} label="Quarantine" badge={activeBreachCount} />
+            </>
+          )}
         </div>
 
         <div style={{ marginTop: 'auto', background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: colors.gold, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: colors.navy }}>A</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '14px', fontWeight: 600, color: colors.white }}>UA Admin</div>
-            <div style={{ fontSize: '12px', color: '#94A3B8' }}>admin@ua.edu.ph</div>
+          <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: colors.gold, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: colors.navy }}>
+            {userName.charAt(0).toUpperCase()}
+          </div>
+          <div style={{ flex: 1, overflow: 'hidden' }}>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: colors.white, whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{userName}</div>
+            <div style={{ fontSize: '12px', color: '#94A3B8' }}>{userRole === 'viewer' ? 'Read-Only Viewer' : 'System Admin'}</div>
           </div>
           <LogOut size={18} color="#94A3B8" style={{ cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = colors.white} onMouseLeave={e => e.currentTarget.style.color = '#94A3B8'} onClick={() => { localStorage.removeItem('ua_token'); localStorage.removeItem('ua_user'); window.location.href = '/'; }} />
         </div>
@@ -387,7 +427,134 @@ export default function AdminDashboard({ navigate }) {
       {/* ─── MAIN CONTENT ─── */}
       <div style={{ flex: 1, padding: '48px 60px', overflowY: 'auto' }}>
 
-        {activeMenu === "stalls" && (
+        {/* ---------------- VIEW 0: RANKINGS ---------------- */}
+        {activeMenu === "ranking" && (
+          <div style={{ animation: 'fadeUp 0.4s ease' }}>
+            <div style={{ marginBottom: '40px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '20px' }}>
+              <div>
+                <h1 style={{ fontSize: '32px', fontWeight: 700, color: colors.navy, margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>
+                  Canteen <span style={{ color: colors.gold }}>Rankings</span>
+                </h1>
+                <p style={{ color: colors.textMuted, margin: 0, fontSize: '16px' }}>Live leaderboard based on cryptographically verified student evaluations.</p>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Filter By Criteria</label>
+                <select
+                  value={rankingFilter}
+                  onChange={(e) => setRankingFilter(e.target.value)}
+                  style={{ padding: '10px 16px', borderRadius: '8px', border: `1px solid ${colors.border}`, backgroundColor: colors.white, fontSize: '15px', fontWeight: 600, color: colors.navy, outline: 'none', cursor: 'pointer', minWidth: '200px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
+                >
+                  <option value="Overall">Overall Rating</option>
+                  <option value="Food">Food Quality</option>
+                  <option value="Service">Customer Service</option>
+                  <option value="Staff">Staff Politeness</option>
+                  <option value="Clean">Cleanliness</option>
+                  <option value="Value">Value for Money</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: '16px' }}>
+              {stallsList.map(stall => {
+                const stallFeedbacks = safeFeedbacks.filter(f => {
+                   const match = f.comment?.match(/\[Stall: (.*?)\]/);
+                   return match ? match[1] === stall.name : false;
+                });
+                
+                let totalScore = 0;
+                let validCount = 0;
+
+                stallFeedbacks.forEach(f => {
+                  if (rankingFilter === "Overall") {
+                    totalScore += f.rating;
+                    validCount++;
+                  } else {
+                    // Extract cryptographically secure criteria scoring from string payload!
+                    // Example: Food: 5/5 | Service: 5/5
+                    const criteriaMatch = f.comment?.match(new RegExp(`${rankingFilter}: (\\d+)/5`));
+                    if (criteriaMatch) {
+                      totalScore += parseInt(criteriaMatch[1], 10);
+                      validCount++;
+                    }
+                  }
+                });
+
+                const avg = validCount > 0 ? totalScore / validCount : 0;
+                
+                return { 
+                  id: stall.id,
+                  name: stall.name, 
+                  image: stall.image,
+                  avg: Number(avg.toFixed(2)), 
+                  total: stallFeedbacks.length,
+                  validScoreCount: validCount
+                };
+              }).filter(s => s.total > 0).sort((a,b) => b.avg - a.avg).map((stall, idx) => (
+                <div key={stall.name} style={{ display: 'flex', alignItems: 'center', padding: '20px 24px', backgroundColor: colors.white, borderRadius: '16px', border: `1px solid ${colors.border}`, boxShadow: '0 8px 20px rgba(0,0,0,0.03)', gap: '24px', position: 'relative', overflow: 'hidden', transition: 'transform 0.2s', cursor: 'default' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
+                  
+                  {/* Rank Indicator */}
+                  <div style={{ width: '48px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    {idx === 0 && <Trophy size={32} color={colors.gold} style={{ filter: 'drop-shadow(0 2px 4px rgba(229,168,35,0.4))' }} />}
+                    {idx === 1 && <Medal size={28} color="#94A3B8" />}
+                    {idx === 2 && <Award size={28} color="#B45309" />}
+                    {idx > 2 && <div style={{ fontSize: '24px', fontWeight: 800, color: '#CBD5E1' }}>#{idx + 1}</div>}
+                  </div>
+
+                  {/* Stall Image Avatar */}
+                  <div style={{ width: '64px', height: '64px', borderRadius: '12px', backgroundColor: colors.bg, overflow: 'hidden', border: `2px solid ${idx === 0 ? colors.gold : colors.border}`, flexShrink: 0 }}>
+                    {stall.image ? (
+                      <img src={stall.image} alt={stall.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Store size={24} color="#94A3B8" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Stall Details */}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <h3 style={{ margin: 0, fontSize: '20px', color: colors.navy, fontWeight: 700 }}>{stall.name}</h3>
+                      {idx === 0 && rankingFilter === "Overall" && <span style={{ backgroundColor: 'rgba(229,168,35,0.1)', color: colors.gold, fontSize: '10px', fontWeight: 800, padding: '4px 8px', borderRadius: '12px', letterSpacing: '0.05em' }}>OVERALL BEST</span>}
+                      {idx === 0 && rankingFilter !== "Overall" && <span style={{ backgroundColor: 'rgba(56,142,60,0.1)', color: colors.success, fontSize: '10px', fontWeight: 800, padding: '4px 8px', borderRadius: '12px', letterSpacing: '0.05em' }}>#1 IN {rankingFilter.toUpperCase()}</span>}
+                    </div>
+                    <div style={{ fontSize: '14px', color: colors.textMuted, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Users size={14} /> Based on {stall.total} verified student review{stall.total !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+
+                  {/* Action Button */}
+                  <button 
+                    onClick={() => window.open(`http://localhost:4000/api/reports/stall/${stall.id}`, '_blank')}
+                    style={{ background: 'transparent', border: `1px solid ${colors.border}`, color: colors.navy, padding: '10px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', marginRight: '16px' }}
+                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = colors.navy; e.currentTarget.style.color = colors.white; }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = colors.navy; }}
+                  >
+                    <Download size={14} /> Full Report
+                  </button>
+
+                  {/* Score & Visual Bar */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', width: '140px' }}>
+                    <div style={{ fontSize: '32px', fontWeight: 800, color: colors.navy, display: 'flex', alignItems: 'baseline', gap: '4px', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                      {stall.avg.toFixed(1)} <span style={{ fontSize: '16px', color: colors.textMuted, fontWeight: 600 }}>/ 5</span>
+                    </div>
+                    
+                    <div style={{ width: '100%', height: '6px', backgroundColor: colors.bg, borderRadius: '4px', marginTop: '8px', overflow: 'hidden' }}>
+                      <div style={{ width: `${(stall.avg / 5) * 100}%`, height: '100%', backgroundColor: colors.gold, borderRadius: '4px', transition: 'width 1s ease' }}></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {(stallsList.length === 0 || safeFeedbacks.length === 0) && (
+                <div style={{ padding: '40px', textAlign: 'center', color: colors.textMuted }}>No evaluations have been recorded yet to formulate a ranking.</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ---------------- VIEW 1: MANAGE STALLS ---------------- */}
+        {activeMenu === "stalls" && userRole !== 'viewer' && (
           <div style={{ animation: 'fadeUp 0.4s ease' }}>
             <div style={{ marginBottom: '40px' }}>
               <h1 style={{ fontSize: '32px', fontWeight: 700, color: colors.navy, margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>
@@ -425,19 +592,32 @@ export default function AdminDashboard({ navigate }) {
                 <p style={{ color: colors.textMuted, margin: 0, fontSize: '16px' }}>Real-time verified insights from the secure database.</p>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em' }}>FILTER BY STALL</label>
-                <select
-                  value={dashboardStallFilter}
-                  onChange={(e) => setDashboardStallFilter(e.target.value)}
-                  style={{ padding: '10px 16px', borderRadius: '8px', border: `1px solid ${colors.border}`, backgroundColor: colors.white, fontSize: '15px', fontWeight: 600, color: colors.navy, outline: 'none', cursor: 'pointer', minWidth: '220px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
+              <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: colors.textMuted, letterSpacing: '0.05em' }}>FILTER BY STALL</label>
+                  <select
+                    value={dashboardStallFilter}
+                    onChange={(e) => setDashboardStallFilter(e.target.value)}
+                    style={{ padding: '10px 16px', borderRadius: '8px', border: `1px solid ${colors.border}`, backgroundColor: colors.white, fontSize: '15px', fontWeight: 600, color: colors.navy, outline: 'none', cursor: 'pointer', minWidth: '220px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
+                  >
+                    <option value="All">All Stalls (Overall Metrics)</option>
+                    {stallsList.map(s => (
+                      <option key={s.id} value={s.name}>{s.name}</option>
+                    ))}
+                    <option value="General Feedback">General Feedback</option>
+                  </select>
+                </div>
+                
+                {/* 👉 NEW: PDF Download Button connected to reportGenerator! */}
+                <button 
+                  onClick={handleDownloadReport}
+                  style={{ backgroundColor: colors.navy, color: colors.white, border: 'none', padding: '12px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'background-color 0.2s', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#17365C'} 
+                  onMouseLeave={e => e.currentTarget.style.backgroundColor = colors.navy}
                 >
-                  <option value="All">All Stalls (Overall Metrics)</option>
-                  {stallsList.map(s => (
-                    <option key={s.id} value={s.name}>{s.name}</option>
-                  ))}
-                  <option value="General Feedback">General Feedback</option>
-                </select>
+                  <Download size={18} />
+                  Export PDF Report
+                </button>
               </div>
             </div>
 

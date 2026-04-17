@@ -185,6 +185,41 @@ router.put('/hack/:id', async (req, res) => {
 });
 
 
+// --- PDF REPORT GENERATION ROUTE ---
+const { generateStoreReport, analyzeFeedbackData } = require('./reportGenerator');
+
+router.get('/reports/overall', async (req, res) => {
+    try {
+        const feedbacks = await getAllFeedback(); 
+        const reportData = await analyzeFeedbackData('UA Main Canteen System', feedbacks);
+        generateStoreReport(reportData, res);
+    } catch (err) {
+        console.error(err);
+        if (!res.headersSent) res.status(500).json({ error: "Failed to generate report" });
+    }
+});
+
+router.get('/reports/stall/:id', async (req, res) => {
+    try {
+        const stallRows = await getAllStalls();
+        const stall = stallRows.find(s => s.id == req.params.id);
+        if (!stall) return res.status(404).json({ error: "Stall not found" });
+
+        // Extract stall's feedbacks directly from comment cryptographic payload
+        const feedbacks = await getAllFeedback(); 
+        const stallFeedbacks = feedbacks.filter(f => {
+            const match = f.comment?.match(/\[Stall: (.*?)\]/);
+            return match ? match[1] === stall.name : false;
+        });
+        
+        const reportData = await analyzeFeedbackData(stall.name, stallFeedbacks);
+        generateStoreReport(reportData, res);
+    } catch (err) {
+        console.error(err);
+        if (!res.headersSent) res.status(500).json({ error: "Failed to generate stall report" });
+    }
+});
+
 // --- STALL MANAGEMENT ROUTES (PostgreSQL) ---
 
 router.get('/stalls', async (req, res) => {
