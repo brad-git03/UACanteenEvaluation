@@ -47,7 +47,7 @@ export default function FeedbackForm({ navigate }) {
         setLoadingStalls(true);
         const data = await fetchStalls();
         if (data && Array.isArray(data)) {
-          // 👉 Keep the full objects so we have access to stall.image later!
+          // Keep the full objects so we have access to stall.image when rendering the selection cards
           setAvailableStalls(data);
 
           if (data.length === 0) {
@@ -86,7 +86,7 @@ export default function FeedbackForm({ navigate }) {
   const totalScore = Object.values(ratings).reduce((sum, val) => sum + val, 0);
   const overallRating = Math.round(totalScore / 5);
 
-  // 👉 FIX: Prevents white screen on logout
+  // Prevents white screen on logout
   const handleLogout = () => {
     localStorage.removeItem('ua_token');
     localStorage.removeItem('ua_user');
@@ -125,7 +125,7 @@ export default function FeedbackForm({ navigate }) {
 
     const payloadText = `[Stall: ${selectedStall}] [Scores -> Food: ${ratings.Food}/5 | Service: ${ratings.Service}/5 | Staff: ${ratings.Staff}/5 | Clean: ${ratings.Cleanliness}/5 | Value: ${ratings.Value}/5]\n\n${form.comment}`;
 
-    // 👉 FIX: Exclude the image attachment from the cryptographic signature calculation!
+    // Exclude the image attachment from the cryptographic signature calculation
     const payloadToSign = {
       customer_name: user.full_name,
       rating: overallRating,
@@ -202,7 +202,7 @@ export default function FeedbackForm({ navigate }) {
         @media (max-width: 768px) {
           .card-inner { padding: 24px; }
           .form-grid { grid-template-columns: 1fr; gap: 24px; }
-          /* 👉 Make Action Buttons side-by-side & identical size on Mobile */
+          /* Make Action Buttons side-by-side & identical size on Mobile */
           .action-buttons { flex-direction: row !important; gap: 12px !important; margin-top: 24px !important; }
           .action-buttons button { width: 50% !important; max-width: 100% !important; flex: 1 !important; padding: 14px 8px !important; font-size: 14px !important; justify-content: center !important; }
         }
@@ -303,7 +303,7 @@ export default function FeedbackForm({ navigate }) {
                         // Pick a unique placeholder based on the stall's position in the list
                         const uniquePlaceholder = fallbackImages[index % fallbackImages.length];
 
-                        // 👉 Checks multiple possible database column names just in case!
+                        // Checks multiple possible database column names just in case!
                         const stallImage = stall.image || stall.photo || stall.imageUrl || stall.attachment || uniquePlaceholder;
 
                         return (

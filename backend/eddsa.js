@@ -6,7 +6,7 @@ function serializeForSignature(feedbackObj) {
     const rating = Number(feedbackObj.rating) || 0;
     const comment = feedbackObj.comment ? String(feedbackObj.comment).trim() : "";
     
-    // 👉 CRITICAL FIX: Extract the image so it is protected by the hash
+    //Extract the image so it is protected by the hash
     const attachment = feedbackObj.attachment ? String(feedbackObj.attachment) : ""; 
 
     const safeName = encodeURIComponent(name);

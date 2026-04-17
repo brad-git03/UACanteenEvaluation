@@ -7,7 +7,7 @@ const {
 } = require('./db');
 const { verifySignature } = require('./eddsa');
 
-// 👉 CLOUDINARY CONFIGURATION
+// CLOUDINARY CONFIGURATION
 const cloudinary = require('cloudinary').v2;
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -15,7 +15,7 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// 👇 1. Import our new Authentication logic
+// 1. Import our new Authentication logic
 const { registerUser, loginUser, requireAuth } = require('./auth');
 
 // --- IDENTITY & AUTH ROUTES ---
@@ -23,13 +23,13 @@ router.post('/register', registerUser);
 router.post('/login', loginUser);
 
 // --- SECURE FEEDBACK ROUTE ---
-// 👇 2. Notice requireAuth is inserted right here as a "bouncer"!
+// 2. Notice requireAuth is inserted right here as a "bouncer"!
 router.post('/feedback', requireAuth, async (req, res) => {
 
     // We no longer extract customer_name from req.body!
     let { rating, comment, attachment, signature, public_key } = req.body;
 
-    // 🔒 AUTHENTICITY ENFORCEMENT: 
+    // AUTHENTICITY ENFORCEMENT: 
     // We strictly use the identity verified by the JWT token.
     const customer_name = req.user.full_name;
     const user_id = req.user.id;
@@ -41,7 +41,7 @@ router.post('/feedback', requireAuth, async (req, res) => {
     if (!comment) return res.status(400).json({ error: 'Comment required' });
     if (!signature || !public_key) return res.status(400).json({ error: 'Cryptographic signature and public key are required.' });
 
-    // 👉 FIX: Reconstruct the payload WITHOUT the attachment for the signature check
+    // Reconstruct the payload WITHOUT the attachment for the signature check
     const feedbackForVerify = { customer_name, rating, comment };
 
     // 2. VERIFY the frontend's signature BEFORE doing anything else
@@ -56,7 +56,7 @@ router.post('/feedback', requireAuth, async (req, res) => {
         return res.status(401).json({ error: 'Malformed cryptographic keys provided.' });
     }
 
-    // 👉 3. CLOUDINARY UPLOAD: Now that signature is verified, swap the heavy Base64 string for a Cloud URL!
+    // 3. CLOUDINARY UPLOAD: Now that signature is verified, swap the heavy Base64 string for a Cloud URL!
     try {
         if (attachment && !attachment.startsWith('http')) {
             const uploadRes = await cloudinary.uploader.upload(attachment, { folder: 'ua_canteen/feedback' });
@@ -83,7 +83,7 @@ router.get('/feedbacks', async (req, res) => {
         const rows = await getAllFeedback();
 
         const verifiedRows = rows.map(row => {
-            // 👉 FIX: Reconstruct the payload WITHOUT the attachment for the signature check
+            // Reconstruct the payload WITHOUT the attachment for the signature check
             const feedbackForVerify = {
                 customer_name: row.customer_name,
                 rating: row.rating,
@@ -141,7 +141,7 @@ router.post('/verify', async (req, res) => {
         } catch (e) { }
     }
 
-    // 👉 FIX: Reconstruct the payload WITHOUT the attachment for the signature check
+    // Reconstruct the payload WITHOUT the attachment for the signature check
     const feedbackForVerify = { customer_name, rating, comment };
 
     try {
@@ -201,7 +201,7 @@ router.post('/stalls', async (req, res) => {
         let { name, image } = req.body;
         if (!name) return res.status(400).json({ error: "Stall name is required" });
 
-        // 👉 CLOUDINARY UPLOAD: Stalls Cover Photo
+        // CLOUDINARY UPLOAD: Stalls Cover Photo
         if (image && !image.startsWith('http')) {
             const uploadRes = await cloudinary.uploader.upload(image, { folder: 'ua_canteen/stalls' });
             image = uploadRes.secure_url;
@@ -222,7 +222,7 @@ router.put('/stalls/:id', async (req, res) => {
         let { name, image } = req.body;
         if (!name) return res.status(400).json({ error: "Stall name is required" });
 
-        // 👉 CLOUDINARY UPLOAD: Stalls Cover Photo Edit
+        // CLOUDINARY UPLOAD: Stalls Cover Photo Edit
         if (image && !image.startsWith('http')) {
             const uploadRes = await cloudinary.uploader.upload(image, { folder: 'ua_canteen/stalls' });
             image = uploadRes.secure_url;

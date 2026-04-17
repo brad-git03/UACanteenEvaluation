@@ -19,7 +19,7 @@
   --danger-bg: #fcf0f0;
 }
 
-/* 👉 THIS IS THE FONT FIX: Forces Inter everywhere and removes the old serif font */
+
 * { 
   box-sizing: border-box; 
   margin: 0; 
@@ -38,8 +38,7 @@ body {
 }
 
 /* 
-   We removed the Playfair Display font. 
-   Now h1, h2, h3, and .serif will just use bold Inter! 
+  Inter Font 
 */
 h1, h2, h3, .serif { font-weight: 700; letter-spacing: -0.02em; }
 
