@@ -98,7 +98,7 @@ export default function StallManager() {
     try {
       const safeStallName = encodeURIComponent(stallName);
       // Hardcode localhost base for development (or process.env in production)
-      const targetUrl = `http://localhost:3000/?stall=${safeStallName}`;
+      const targetUrl = `${window.location.origin}/?stall=${safeStallName}`;
       
       const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(targetUrl)}&margin=20`;
       

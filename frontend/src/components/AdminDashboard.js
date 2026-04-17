@@ -7,6 +7,8 @@ import {
 } from 'recharts';
 import { Camera, LayoutDashboard, FileText, LogOut, ShieldCheck, X, Star, Key, Hash, ShieldAlert, Search, Download, AlertTriangle, Clock, Terminal, Trash2, ChevronLeft, ChevronRight, Loader2, Store, Trophy, Medal, Award, Users } from 'lucide-react';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000/api';
+
 export default function AdminDashboard({ navigate }) {
   const [feedbacks, setFeedbacks] = useState([]);
   const [verifyState, setVerifyState] = useState({});
@@ -301,10 +303,10 @@ export default function AdminDashboard({ navigate }) {
 
   // 👉 NEW: Download PDF Report logic
   const handleDownloadReport = () => {
-    let url = 'http://localhost:4000/api/reports/overall';
+    let url = `${API_URL}/reports/overall`;
     if (dashboardStallFilter !== "All" && dashboardStallFilter !== "General Feedback") {
       const stallObj = stallsList.find(s => s.name === dashboardStallFilter);
-      if (stallObj) url = `http://localhost:4000/api/reports/stall/${stallObj.id}`;
+      if (stallObj) url = `${API_URL}/reports/stall/${stallObj.id}`;
     }
     window.open(url, '_blank');
   };
@@ -527,7 +529,7 @@ export default function AdminDashboard({ navigate }) {
 
                   {/* Action Button */}
                   <button
-                    onClick={() => window.open(`http://localhost:4000/api/reports/stall/${stall.id}`, '_blank')}
+                    onClick={() => window.open(`${API_URL}/reports/stall/${stall.id}`, '_blank')}
                     style={{ background: 'transparent', border: `1px solid ${colors.border}`, color: colors.navy, padding: '10px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', marginRight: '16px' }}
                     onMouseEnter={e => { e.currentTarget.style.backgroundColor = colors.navy; e.currentTarget.style.color = colors.white; }}
                     onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = colors.navy; }}
