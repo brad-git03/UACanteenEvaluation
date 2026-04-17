@@ -54,7 +54,7 @@ export default function LandingPage({ navigate }) {
           .hero-h2 { font-size: 28px !important; }
           .card-h3 { font-size: 22px !important; }
           
-          /* 👉 FIX 1: Hide specific elements on mobile */
+          /* Hide specific elements on mobile */
           .hide-on-mobile { display: none !important; }
         }
       `}</style>
@@ -184,7 +184,7 @@ export default function LandingPage({ navigate }) {
         <p style={{ margin: 0, fontWeight: 500 }}>© 2026 University of the Assumption. All Rights Reserved.</p>
         <p style={{ margin: '8px 0 0 0', color: '#94A3B8', fontSize: '13px' }}>Cryptographically Secured EdDSA System</p>
         
-        {/* 👉 FIX: Added hide-on-mobile class here! */}
+        {/* Added hide-on-mobile class here! */}
         <div className="hide-on-mobile" style={{ marginTop: '32px' }}>
           <button 
             onClick={() => navigate('hacker')}

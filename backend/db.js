@@ -43,12 +43,12 @@ async function initDB() {
             );
         `);
         
-        // 👉 NEW: Add the image column to the database!
+        // Add the image column to the database
         await pool.query(`ALTER TABLE stalls ADD COLUMN IF NOT EXISTS image TEXT;`);
 
-        console.log("✅ Database initialized: 'users', 'feedbacks', and 'stalls' tables are ready.");
+        console.log("Database initialized: 'users', 'feedbacks', and 'stalls' tables are ready.");
     } catch (err) {
-        console.error("❌ Failed to create table:", err.message);
+        console.error("Failed to create table:", err.message);
     }
 }
 
@@ -99,13 +99,13 @@ async function getAllStalls() {
     return result.rows;
 }
 
-// 👉 NEW: Now saves the image!
+// Saves the image
 async function addStall(name, image) {
     const result = await pool.query(`INSERT INTO stalls (name, image) VALUES ($1, $2) RETURNING *`, [name, image]);
     return result.rows[0];
 }
 
-// 👉 NEW: Function for the Edit feature!
+// Function for the Edit feature!
 async function editStall(id, name, image) {
     const result = await pool.query(`UPDATE stalls SET name = $1, image = $2 WHERE id = $3 RETURNING *`, [name, image, id]);
     return result.rows[0];

@@ -20,6 +20,7 @@ export default function AdminDashboard({ navigate }) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
+<<<<<<< HEAD
   // 👉 NEW: Role-Based Access Control (Admin vs Viewer)
   const [userRole, setUserRole] = useState('admin');
   const [userName, setUserName] = useState('UA Admin');
@@ -39,6 +40,9 @@ export default function AdminDashboard({ navigate }) {
   }, []);
 
   // 👉 NEW: State for the Stall Filter dropdown
+=======
+  // State for the Stall Filter dropdown
+>>>>>>> 0254e67983e163876f07eee4956edd98d8119a74
   const [dashboardStallFilter, setDashboardStallFilter] = useState("All");
   const [stallsList, setStallsList] = useState([]);
 
@@ -78,7 +82,7 @@ export default function AdminDashboard({ navigate }) {
       }
     };
 
-    // 👉 Fetches the list of stalls for the dropdown filter!
+    // Fetches the list of stalls for the dropdown filter!
     fetchStalls().then(data => setStallsList(data)).catch(console.error);
 
     fetchAndAudit();
@@ -124,7 +128,7 @@ export default function AdminDashboard({ navigate }) {
   const currentItems = searchedFeedbacks.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(searchedFeedbacks.length / itemsPerPage);
 
-  // 👉 NEW: Filter dashboard math based on the selected stall!
+  // Filter dashboard math based on the selected stall!
   const dashboardFeedbacks = dashboardStallFilter === "All" 
     ? safeFeedbacks 
     : safeFeedbacks.filter(f => {
@@ -267,7 +271,7 @@ export default function AdminDashboard({ navigate }) {
     link.remove();
   };
 
-  // 👉 NEW: Extracts Stall Name from the comment
+  // Extracts Stall Name from the comment
   const parseFeedbackData = (text) => {
     if (!text) return { stall: null, metrics: null, text: "No comment provided." };
     
@@ -585,7 +589,7 @@ export default function AdminDashboard({ navigate }) {
               </div>
             )}
 
-            {/* 👉 NEW: Dashboard Header with Filter Dropdown */}
+            {/* Dashboard Header with Filter Dropdown */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '40px', flexWrap: 'wrap', gap: '20px' }}>
               <div>
                 <h1 style={{ fontSize: '32px', fontWeight: 700, color: colors.navy, margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>Dashboard <span style={{ color: colors.gold }}>Overview</span></h1>
@@ -777,7 +781,7 @@ export default function AdminDashboard({ navigate }) {
                         </td>
                         <td style={{ padding: '20px 12px', color: colors.text, fontSize: '15px', fontWeight: 600 }}>{f.customer_name || 'Anonymous'}</td>
 
-                        {/* 👉 NEW: Table now shows Stall name */}
+                        {/* Table now shows Stall name */}
                         <td style={{ padding: '20px 12px', fontSize: '14px', color: colors.textMuted, lineHeight: 1.5 }}>
                           {parsed.stall && <span style={{ color: colors.navy, fontWeight: 600, backgroundColor: '#F1F5F9', padding: '4px 10px', borderRadius: '6px', marginRight: '8px' }}>{parsed.stall}</span>}
                           {parsed.metrics && <span style={{ fontSize: '12px', color: colors.textMuted }}>Metrics</span>}
@@ -952,7 +956,7 @@ export default function AdminDashboard({ navigate }) {
                         </td>
                         <td style={{ padding: '20px 12px', color: colors.text, fontSize: '15px', fontWeight: 600 }}>{f.customer_name || 'Anonymous'}</td>
 
-                        {/* 👉 NEW: Table now shows Stall name */}
+                        {/* Table now shows Stall name */}
                         <td style={{ padding: '20px 12px', fontSize: '14px', color: colors.textMuted, lineHeight: 1.5 }}>
                           {parsed.stall && <span style={{ color: '#991B1B', fontWeight: 600, backgroundColor: '#FEE2E2', padding: '4px 10px', borderRadius: '6px', marginRight: '8px' }}>{parsed.stall}</span>}
                           {parsed.metrics && <span style={{ fontSize: '12px', color: colors.textMuted }}>Metrics</span>}
@@ -988,7 +992,7 @@ export default function AdminDashboard({ navigate }) {
             <h2 style={{ fontSize: '24px', fontWeight: 700, color: colors.navy, margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>Feedback Report</h2>
             <p style={{ fontSize: '14px', color: colors.textMuted, margin: '0 0 32px 0' }}>ID #{selectedFeedback.id} • Submitted via EdDSA Portal</p>
 
-            {/* 👉 NEW: Modal now shows Stall name */}
+            {/* Modal now shows Stall name */}
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${colors.border}`, paddingBottom: '16px', marginBottom: '16px' }}>
               <span style={{ fontSize: '13px', color: colors.textMuted, fontWeight: 600, letterSpacing: '0.05em' }}>STALL REVIEWED</span>
               <span style={{ fontWeight: 700, color: colors.navy, fontSize: '15px', backgroundColor: '#F1F5F9', padding: '4px 12px', borderRadius: '6px' }}>

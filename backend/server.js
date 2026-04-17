@@ -15,7 +15,7 @@ app.use(cors({
     credentials: true
 }));
 
-// 👉 CRITICAL FIX: Allow the server to accept large Base64 photos without crashing
+// CRITICAL FIX: Allow the server to accept large Base64 photos without crashing
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 

@@ -11,7 +11,7 @@ const isValidUaId = (id) => /^\d{10}$/.test(id);
 const registerUser = async (req, res) => {
     const { ua_id, full_name, role, password } = req.body;
     
-    // 🔒 BACKEND VALIDATION: Enforce 10-digit rule
+    // BACKEND VALIDATION: Enforce 10-digit rule
     if (!isValidUaId(ua_id) && role !== 'admin') { // (Allowing admins to have custom IDs if needed, otherwise it blocks students/staff)
         return res.status(400).json({ error: 'Invalid format. UA ID must be exactly 10 digits with no dashes.' });
     }
@@ -35,7 +35,7 @@ const registerUser = async (req, res) => {
 const loginUser = async (req, res) => {
     const { ua_id, password } = req.body;
 
-    // 🔒 BACKEND VALIDATION: Prevent unnecessary DB queries if format is wrong
+    // BACKEND VALIDATION: Prevent unnecessary DB queries if format is wrong
     if (!isValidUaId(ua_id) && ua_id !== 'admin') { 
         return res.status(400).json({ error: 'Invalid format. UA ID must be exactly 10 digits.' });
     }
