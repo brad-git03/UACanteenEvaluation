@@ -3,9 +3,20 @@ const router = express.Router();
 const {
     addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback,
     tamperFeedback, getLightFeedbacks, getFeedbackPhoto,
-    getAllStalls, addStall, deleteStall, editStall
+    getAllStalls, addStall, deleteStall, editStall,
+    getStallByToken, verifyStallEmail
 } = require('./db');
 const { verifySignature } = require('./eddsa');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
+
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+});
 
 // CLOUDINARY CONFIGURATION
 const cloudinary = require('cloudinary').v2;
@@ -188,10 +199,27 @@ router.put('/hack/:id', async (req, res) => {
 // --- PDF REPORT GENERATION ROUTE ---
 const { generateStoreReport, analyzeFeedbackData } = require('./reportGenerator');
 
+const getVerifiedFeedbacks = (feedbacks) => {
+    return feedbacks.filter(row => {
+        const feedbackForVerify = {
+            customer_name: row.customer_name,
+            rating: row.rating,
+            comment: row.comment
+        };
+        try {
+            const pubKeyBin = Buffer.from(row.public_key, 'base64');
+            return verifySignature(pubKeyBin, feedbackForVerify, row.signature);
+        } catch (e) {
+            return false;
+        }
+    });
+};
+
 router.get('/reports/overall', async (req, res) => {
     try {
-        const feedbacks = await getAllFeedback(); 
-        const reportData = await analyzeFeedbackData('UA Main Canteen System', feedbacks);
+        const rawFeedbacks = await getAllFeedback(); 
+        const verifiedFeedbacks = getVerifiedFeedbacks(rawFeedbacks);
+        const reportData = await analyzeFeedbackData('UA Main Canteen System', verifiedFeedbacks);
         generateStoreReport(reportData, res);
     } catch (err) {
         console.error(err);
@@ -206,8 +234,9 @@ router.get('/reports/stall/:id', async (req, res) => {
         if (!stall) return res.status(404).json({ error: "Stall not found" });
 
         // Extract stall's feedbacks directly from comment cryptographic payload
-        const feedbacks = await getAllFeedback(); 
-        const stallFeedbacks = feedbacks.filter(f => {
+        const rawFeedbacks = await getAllFeedback(); 
+        const verifiedFeedbacks = getVerifiedFeedbacks(rawFeedbacks);
+        const stallFeedbacks = verifiedFeedbacks.filter(f => {
             const match = f.comment?.match(/\[Stall: (.*?)\]/);
             return match ? match[1] === stall.name : false;
         });
@@ -231,9 +260,81 @@ router.get('/stalls', async (req, res) => {
     }
 });
 
+router.get('/stalls/verify-email', async (req, res) => {
+    const { token } = req.query;
+    try {
+        const stall = await getStallByToken(token);
+        if (!stall) return res.status(400).send('Invalid or expired token.');
+        await verifyStallEmail(stall.id);
+        res.send('Email verified successfully! You can now close this window.');
+    } catch (err) {
+        res.status(500).send('Verification failed.');
+    }
+});
+
+router.post('/stalls/:id/send-report', async (req, res) => {
+    try {
+        const stallRows = await getAllStalls();
+        const stall = stallRows.find(s => s.id == req.params.id);
+        if (!stall) return res.status(404).json({ error: "Stall not found" });
+        if (!stall.email || !stall.is_email_verified) return res.status(400).json({ error: "Stall does not have a verified email." });
+
+        const rawFeedbacks = await getAllFeedback(); 
+        const verifiedFeedbacks = getVerifiedFeedbacks(rawFeedbacks);
+        const stallFeedbacks = verifiedFeedbacks.filter(f => {
+            const match = f.comment?.match(/\[Stall: (.*?)\]/);
+            return match ? match[1] === stall.name : false;
+        });
+        
+        const reportData = await analyzeFeedbackData(stall.name, stallFeedbacks);
+        
+        // Generate PDF Buffer
+        const pdfBuffer = await generateStoreReport(reportData);
+
+        // Send Email
+        await transporter.sendMail({
+            from: '"UA Canteen Bot" <' + process.env.EMAIL_USER + '>',
+            to: stall.email,
+            subject: `Automated Evaluation Report: ${stall.name}`,
+            text: `Hello ${stall.name} owner,\n\nHere is your automated stall evaluation update.\n\nAI Summary & Recommendations:\n${reportData.ai_summary || 'Please find the details in the attached report.'}\n\nBest,\nUA Canteen System`,
+            attachments: [
+                {
+                    filename: `Evaluation_Report_${stall.name.replace(/\s+/g, '_')}.pdf`,
+                    content: pdfBuffer,
+                    contentType: 'application/pdf'
+                }
+            ]
+        });
+
+        res.json({ success: true, message: "Report sent successfully." });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to send stall report email." });
+    }
+});
+const getVerificationEmailTemplate = (name, verifyUrl) => `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+  <div style="background-color: #0c2340; color: #ffffff; padding: 20px; text-align: center;">
+    <h1 style="margin: 0; font-size: 24px; letter-spacing: 1px;">UA Canteen System</h1>
+  </div>
+  <div style="padding: 30px; background-color: #ffffff; color: #333333;">
+    <h2 style="margin-top: 0; color: #0c2340;">Verify Your Stall Account</h2>
+    <p style="font-size: 16px; line-height: 1.5;">Hello,</p>
+    <p style="font-size: 16px; line-height: 1.5;">You have been registered as the official owner of <strong>${name}</strong> on the UA Canteen Evaluation platform. To verify your identity and start receiving automated AI feedback reports, please click the secure link below.</p>
+    <div style="text-align: center; margin: 35px 0;">
+      <a href="${verifyUrl}" style="background-color: #e5a823; color: #0c2340; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 6px; font-size: 16px; display: inline-block;">Verify Email Address</a>
+    </div>
+    <p style="font-size: 14px; color: #666666; margin-top: 30px;">If you did not request this, please safely ignore this email.</p>
+  </div>
+  <div style="background-color: #f1f5f9; padding: 15px; text-align: center; font-size: 12px; color: #94a3b8;">
+    &copy; ${new Date().getFullYear()} UA Canteen Evaluation System. This is an automated secure message.
+  </div>
+</div>
+`;
+
 router.post('/stalls', async (req, res) => {
     try {
-        let { name, image } = req.body;
+        let { name, image, email } = req.body;
         if (!name) return res.status(400).json({ error: "Stall name is required" });
 
         // CLOUDINARY UPLOAD: Stalls Cover Photo
@@ -242,7 +343,25 @@ router.post('/stalls', async (req, res) => {
             image = uploadRes.secure_url;
         }
 
-        const newStall = await addStall(name, image || null);
+        let verificationToken = null;
+        if (email) {
+            verificationToken = crypto.randomBytes(20).toString('hex');
+        }
+
+        const newStall = await addStall(name, image || null, email || null, verificationToken);
+        
+        if (email) {
+            const baseUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+            const verifyUrl = `${baseUrl}/api/stalls/verify-email?token=${verificationToken}`;
+            transporter.sendMail({
+                from: '"UA Canteen Bot" <' + process.env.EMAIL_USER + '>',
+                to: email,
+                subject: `Action Required: Verify ${name} Email`,
+                text: `Please verify your email for ${name} by clicking: ${verifyUrl}`,
+                html: getVerificationEmailTemplate(name, verifyUrl)
+            }).catch(console.error);
+        }
+
         res.json(newStall);
     } catch (err) {
         if (err.message.toLowerCase().includes("unique")) {
@@ -254,7 +373,7 @@ router.post('/stalls', async (req, res) => {
 
 router.put('/stalls/:id', async (req, res) => {
     try {
-        let { name, image } = req.body;
+        let { name, image, email } = req.body;
         if (!name) return res.status(400).json({ error: "Stall name is required" });
 
         // CLOUDINARY UPLOAD: Stalls Cover Photo Edit
@@ -263,7 +382,33 @@ router.put('/stalls/:id', async (req, res) => {
             image = uploadRes.secure_url;
         }
 
-        const updatedStall = await editStall(req.params.id, name, image || null);
+        const existingStall = (await getAllStalls()).find(s => s.id == req.params.id);
+        let verificationToken = existingStall.verification_token;
+        let isVerified = existingStall.is_email_verified;
+        let emailChanged = email !== existingStall.email;
+
+        if (emailChanged && email) {
+            verificationToken = crypto.randomBytes(20).toString('hex');
+            isVerified = false;
+        } else if (!email) {
+            verificationToken = null;
+            isVerified = false;
+        }
+
+        const updatedStall = await editStall(req.params.id, name, image || null, email || null, isVerified, verificationToken);
+        
+        if (emailChanged && email) {
+            const baseUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+            const verifyUrl = `${baseUrl}/api/stalls/verify-email?token=${verificationToken}`;
+            transporter.sendMail({
+                from: '"UA Canteen Bot" <' + process.env.EMAIL_USER + '>',
+                to: email,
+                subject: `Action Required: Verify ${name} Email`,
+                text: `Please verify your email for ${name} by clicking: ${verifyUrl}`,
+                html: getVerificationEmailTemplate(name, verifyUrl)
+            }).catch(console.error);
+        }
+
         res.json(updatedStall);
     } catch (err) {
         res.status(500).json({ error: err.message });

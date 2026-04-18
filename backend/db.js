@@ -45,6 +45,9 @@ async function initDB() {
         
         // Add the image column to the database
         await pool.query(`ALTER TABLE stalls ADD COLUMN IF NOT EXISTS image TEXT;`);
+        await pool.query(`ALTER TABLE stalls ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE;`);
+        await pool.query(`ALTER TABLE stalls ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT FALSE;`);
+        await pool.query(`ALTER TABLE stalls ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255);`);
 
         console.log("Database initialized: 'users', 'feedbacks', and 'stalls' tables are ready.");
     } catch (err) {
@@ -100,15 +103,30 @@ async function getAllStalls() {
 }
 
 // Saves the image
-async function addStall(name, image) {
-    const result = await pool.query(`INSERT INTO stalls (name, image) VALUES ($1, $2) RETURNING *`, [name, image]);
+async function addStall(name, image, email = null, verification_token = null) {
+    const result = await pool.query(
+        `INSERT INTO stalls (name, image, email, verification_token) VALUES ($1, $2, $3, $4) RETURNING *`, 
+        [name, image, email, verification_token]
+    );
     return result.rows[0];
 }
 
 // Function for the Edit feature!
-async function editStall(id, name, image) {
-    const result = await pool.query(`UPDATE stalls SET name = $1, image = $2 WHERE id = $3 RETURNING *`, [name, image, id]);
+async function editStall(id, name, image, email = null, is_email_verified = false, verification_token = null) {
+    const result = await pool.query(
+        `UPDATE stalls SET name = $1, image = $2, email = $3, is_email_verified = $4, verification_token = $5 WHERE id = $6 RETURNING *`, 
+        [name, image, email, is_email_verified, verification_token, id]
+    );
     return result.rows[0];
+}
+
+async function getStallByToken(token) {
+    const result = await pool.query(`SELECT * FROM stalls WHERE verification_token = $1`, [token]);
+    return result.rows[0];
+}
+
+async function verifyStallEmail(id) {
+    await pool.query(`UPDATE stalls SET is_email_verified = TRUE, verification_token = NULL WHERE id = $1`, [id]);
 }
 
 async function deleteStall(id) {
@@ -118,5 +136,6 @@ async function deleteStall(id) {
 module.exports = {
     pool, addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback,
     tamperFeedback, getLightFeedbacks, getFeedbackPhoto,
-    getAllStalls, addStall, editStall, deleteStall
+    getAllStalls, addStall, editStall, deleteStall,
+    getStallByToken, verifyStallEmail
 };

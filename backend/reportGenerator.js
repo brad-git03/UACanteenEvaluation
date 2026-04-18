@@ -5,16 +5,26 @@ const PDFDocument = require('pdfkit');
  * @param {Object} reportData - Object containing store metrics and feedback
  * @param {Object} res - Express response object to stream the PDF
  */
-function generateStoreReport(reportData, res) {
-    const doc = new PDFDocument({ margin: 50 });
+function generateStoreReport(reportData, res = null) {
+    return new Promise((resolve, reject) => {
+        const doc = new PDFDocument({ margin: 50 });
 
-    // Set response headers for PDF download
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="Evaluation_Report_${reportData.storeName.replace(/\s+/g, '_')}.pdf"`
-    );
-    doc.pipe(res);
+        let buffers = [];
+        doc.on('data', buffers.push.bind(buffers));
+        doc.on('end', () => {
+            let pdfData = Buffer.concat(buffers);
+            resolve(pdfData);
+        });
+
+        if (res) {
+            // Set response headers for PDF download
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader(
+                'Content-Disposition',
+                `attachment; filename="Evaluation_Report_${reportData.storeName.replace(/\s+/g, '_')}.pdf"`
+            );
+            doc.pipe(res);
+        }
 
     // --- COLORS & STYLING ---
     const colors = {
@@ -63,7 +73,7 @@ function generateStoreReport(reportData, res) {
             doc.rect(50, startY, 512, boxHeight).fillAndStroke(colors.lightBg, colors.lightBg);
             
             // Absolute position the inner text relative to startY
-            doc.fillColor(colors.text).font('Helvetica-Bold').fontSize(11).text(`Customer: ${f.customer_name || 'Anonymous'}`, 60, startY + 12);
+            doc.fillColor(colors.text).font('Helvetica-Bold').fontSize(11).text(`Customer: Anonymous`, 60, startY + 12);
             
             const starColor = f.rating >= 4 ? colors.success : (f.rating >= 3 ? colors.secondary : colors.danger);
             doc.fillColor(starColor).text(`${f.rating}/5 Stars`, 480, startY + 12);
@@ -138,6 +148,7 @@ function generateStoreReport(reportData, res) {
 
     // Finalize PDF
     doc.end();
+    });
 }
 
 /**

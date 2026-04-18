@@ -57,11 +57,11 @@ export const fetchStalls = async () => {
     return response.json();
 };
 
-export const addStall = async (name, image) => {
+export const addStall = async (name, image, email) => {
     const response = await fetch(`${API_URL}/stalls`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, image })
+        body: JSON.stringify({ name, image, email })
     });
     if (!response.ok) {
         const err = await response.json();
@@ -70,15 +70,26 @@ export const addStall = async (name, image) => {
     return response.json();
 };
 
-export const editStall = async (id, name, image) => {
+export const editStall = async (id, name, image, email) => {
     const response = await fetch(`${API_URL}/stalls/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, image })
+        body: JSON.stringify({ name, image, email })
     });
     if (!response.ok) {
         const err = await response.json();
         throw new Error(err.error || 'Failed to edit stall');
+    }
+    return response.json();
+};
+
+export const sendStallReport = async (id) => {
+    const response = await fetch(`${API_URL}/stalls/${id}/send-report`, {
+        method: 'POST'
+    });
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to send report');
     }
     return response.json();
 };

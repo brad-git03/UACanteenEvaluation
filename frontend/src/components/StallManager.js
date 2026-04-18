@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { fetchStalls, addStall, editStall, deleteStall } from '../api';
-import { Store, Plus, Trash2, Loader2, AlertCircle, Image as ImageIcon, X, Edit3, Save, QrCode } from 'lucide-react';
+import { fetchStalls, addStall, editStall, deleteStall, sendStallReport } from '../api';
+import { Store, Plus, Trash2, Loader2, AlertCircle, Image as ImageIcon, X, Edit3, Save, QrCode, Mail, Send } from 'lucide-react';
 
 export default function StallManager() {
   const [stalls, setStalls] = useState([]);
   const [newName, setNewName] = useState("");
   const [newImage, setNewImage] = useState(null);
-  const [editingStallId, setEditingStallId] = useState(null); // 👉 NEW: Tracks which stall is being edited
+  const [newEmail, setNewEmail] = useState("");
+  const [editingStallId, setEditingStallId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const fileInputRef = useRef(null);
@@ -65,11 +66,11 @@ export default function StallManager() {
     try {
       if (editingStallId) {
         // Edit Existing
-        const updated = await editStall(editingStallId, newName.trim(), newImage);
+        const updated = await editStall(editingStallId, newName.trim(), newImage, newEmail.trim());
         setStalls(stalls.map(s => s.id === editingStallId ? updated : s));
       } else {
         // Add New
-        const newStall = await addStall(newName.trim(), newImage);
+        const newStall = await addStall(newName.trim(), newImage, newEmail.trim());
         setStalls([...stalls, newStall]);
       }
       
@@ -84,6 +85,7 @@ export default function StallManager() {
     setEditingStallId(stall.id);
     setNewName(stall.name);
     setNewImage(stall.image || null);
+    setNewEmail(stall.email || "");
     window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll up to the form
   };
 
@@ -91,6 +93,7 @@ export default function StallManager() {
     setEditingStallId(null);
     setNewName("");
     setNewImage(null);
+    setNewEmail("");
     if(fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -134,6 +137,16 @@ export default function StallManager() {
     }
   };
 
+  const handleSendReport = async (id) => {
+    try {
+      alert("Generating and sending report... Please wait.");
+      await sendStallReport(id);
+      alert("Report sent successfully!");
+    } catch (err) {
+      alert(err.message || "Failed to send report.");
+    }
+  };
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', alignItems: 'start' }}>
       
@@ -174,6 +187,17 @@ export default function StallManager() {
               placeholder="e.g., Dad Bobs..." 
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
+              style={{ width: '100%', padding: '14px 16px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '15px', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: colors.navy, marginBottom: '8px' }}>Stall Owner Email (Optional) <Mail size={14} style={{display: 'inline', verticalAlign: 'middle', marginLeft: '4px'}} /></label>
+            <input 
+              type="email" 
+              placeholder="owner@example.com" 
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
               style={{ width: '100%', padding: '14px 16px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '15px', outline: 'none', boxSizing: 'border-box' }}
             />
           </div>
@@ -244,9 +268,25 @@ export default function StallManager() {
                   )}
                 </div>
                 
-                <span style={{ fontWeight: 600, color: colors.text, fontSize: '15px', flex: 1 }}>{stall.name}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                  <span style={{ fontWeight: 600, color: colors.text, fontSize: '15px' }}>{stall.name}</span>
+                  {stall.email && (
+                    <span style={{ fontSize: '12px', color: stall.is_email_verified ? colors.blue : colors.textMuted, display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                      <Mail size={12} /> {stall.email} {stall.is_email_verified ? '(Verified)' : '(Unverified)'}
+                    </span>
+                  )}
+                </div>
                 
                 <div style={{ display: 'flex', gap: '6px' }}>
+                  {stall.is_email_verified && (
+                    <button 
+                      onClick={() => handleSendReport(stall.id)}
+                      style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', color: '#059669', cursor: 'pointer', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}
+                      title="Send AI Report via Email"
+                    >
+                      <Send size={16} />
+                    </button>
+                  )}
                   <button 
                     onClick={() => handleDownloadQR(stall.name)}
                     style={{ background: '#FAF5FF', border: '1px solid #E9D5FF', color: '#9333EA', cursor: 'pointer', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}
