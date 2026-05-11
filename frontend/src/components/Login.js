@@ -1,16 +1,21 @@
 import React, { useState } from 'react';
 import { loginUser, registerUser } from '../api';
-import { Lock, User, ShieldCheck, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Lock, User, ShieldCheck, ArrowRight, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import bgMain from '../Background_img/wmremove-transformed.png'; 
 
 export default function Login({ navigate }) {
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [successModal, setSuccessModal] = useState(false);
+  const [failureModal, setFailureModal] = useState(false);
+  const [failureMessage, setFailureMessage] = useState('');
 
   // Form State
   const [uaId, setUaId] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState('student'); 
 
@@ -42,13 +47,27 @@ export default function Login({ navigate }) {
           navigate('feedback');
         }
       } else {
+        if (password !== confirmPassword) {
+          setError('Passwords do not match');
+          setLoading(false);
+          return;
+        }
         await registerUser({ ua_id: uaId, full_name: fullName, role, password });
         setIsLogin(true);
         setPassword('');
-        alert('Account created successfully! Please log in.');
+        setConfirmPassword('');
+        setUaId('');
+        setFullName('');
+        setRole('student');
+        setSuccessModal(true);
       }
     } catch (err) {
-      setError(err.message);
+      if (isLogin) {
+        setError(err.message);
+      } else {
+        setFailureMessage(err.message);
+        setFailureModal(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -184,7 +203,7 @@ export default function Login({ navigate }) {
               <label style={{ fontSize: '12px', fontWeight: 600, color: colors.textMuted, marginBottom: '8px', display: 'block', letterSpacing: '0.05em' }}>UA ID NUMBER</label>
               <div style={{ position: 'relative' }}>
                 <User size={18} color={colors.textMuted} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
-                <input required type="text" placeholder="e.g. 2024123456" value={uaId} onChange={(e) => setUaId(e.target.value)} style={{ width: '100%', padding: '14px 16px 14px 44px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '15px', color: colors.text, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                <input required type="number" placeholder="e.g. 2024123456" value={uaId} onChange={(e) => setUaId(e.target.value)} style={{ width: '100%', padding: '14px 16px 14px 44px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '15px', color: colors.text, fontFamily: 'inherit', boxSizing: 'border-box' }} />
               </div>
             </div>
 
@@ -214,9 +233,42 @@ export default function Login({ navigate }) {
               <label style={{ fontSize: '12px', fontWeight: 600, color: colors.textMuted, marginBottom: '8px', display: 'block', letterSpacing: '0.05em' }}>PASSWORD</label>
               <div style={{ position: 'relative' }}>
                 <Lock size={18} color={colors.textMuted} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
-                <input required type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: '100%', padding: '14px 16px 14px 44px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '15px', color: colors.text, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                <input required type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: '100%', padding: '14px 16px 14px 44px', paddingRight: !isLogin ? '44px' : '16px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '15px', color: colors.text, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                {!isLogin && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textMuted, transition: 'color 0.2s' }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = colors.navy}
+                    onMouseLeave={(e) => e.currentTarget.style.color = colors.textMuted}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                )}
               </div>
             </div>
+
+            {!isLogin && (
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: colors.textMuted, marginBottom: '8px', display: 'block', letterSpacing: '0.05em' }}>CONFIRM PASSWORD</label>
+                <div style={{ position: 'relative' }}>
+                  <Lock size={18} color={colors.textMuted} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
+                  <input required type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={{ width: '100%', padding: '14px 16px 14px 44px', paddingRight: '44px', borderRadius: '8px', border: confirmPassword && password !== confirmPassword ? `1px solid #EF4444` : `1px solid ${colors.border}`, fontSize: '15px', color: colors.text, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textMuted, transition: 'color 0.2s' }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = colors.navy}
+                    onMouseLeave={(e) => e.currentTarget.style.color = colors.textMuted}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {confirmPassword && password !== confirmPassword && (
+                  <span style={{ fontSize: '12px', color: '#EF4444', marginTop: '4px', display: 'block' }}>Passwords do not match</span>
+                )}
+              </div>
+            )}
 
             <button disabled={loading} type="submit" style={{ marginTop: '12px', width: '100%', padding: '16px', backgroundColor: colors.navy, color: colors.white, border: 'none', borderRadius: '8px', fontWeight: 600, fontSize: '15px', cursor: 'pointer', transition: 'opacity 0.2s', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', fontFamily: 'inherit' }}>
               {loading ? 'Processing...' : (isLogin ? 'Authenticate & Enter' : 'Register Identity')} 
@@ -226,6 +278,48 @@ export default function Login({ navigate }) {
           </form>
         </div>
       </div>
+
+      {/* Success Modal */}
+      {successModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, fontFamily: 'inherit' }}>
+          <div style={{ backgroundColor: colors.white, borderRadius: '16px', padding: '40px', maxWidth: '420px', textAlign: 'center', boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)', border: `1px solid ${colors.border}` }}>
+            <div style={{ fontSize: '60px', marginBottom: '16px' }}>✓</div>
+            <h3 style={{ fontSize: '24px', fontWeight: 700, color: colors.navy, marginBottom: '12px' }}>Account Created Successfully!</h3>
+            <p style={{ fontSize: '15px', color: colors.textMuted, marginBottom: '28px', lineHeight: '1.6' }}>Your account has been registered successfully. Please log in with your credentials to continue.</p>
+            <button 
+              onClick={() => {
+                setSuccessModal(false);
+              }}
+              style={{ width: '100%', padding: '14px', backgroundColor: colors.navy, color: colors.white, border: 'none', borderRadius: '8px', fontWeight: 600, fontSize: '15px', cursor: 'pointer', transition: 'opacity 0.2s', fontFamily: 'inherit' }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Failure Modal */}
+      {failureModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, fontFamily: 'inherit' }}>
+          <div style={{ backgroundColor: colors.white, borderRadius: '16px', padding: '40px', maxWidth: '420px', textAlign: 'center', boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)', border: `1px solid ${colors.border}` }}>
+            <div style={{ fontSize: '60px', marginBottom: '16px' }}>✕</div>
+            <h3 style={{ fontSize: '24px', fontWeight: 700, color: colors.red, marginBottom: '12px' }}>Account Creation Failed</h3>
+            <p style={{ fontSize: '15px', color: colors.textMuted, marginBottom: '28px', lineHeight: '1.6' }}>{failureMessage || 'An error occurred while creating your account. Please try again.'}</p>
+            <button 
+              onClick={() => {
+                setFailureModal(false);
+              }}
+              style={{ width: '100%', padding: '14px', backgroundColor: colors.red, color: colors.white, border: 'none', borderRadius: '8px', fontWeight: 600, fontSize: '15px', cursor: 'pointer', transition: 'opacity 0.2s', fontFamily: 'inherit' }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
