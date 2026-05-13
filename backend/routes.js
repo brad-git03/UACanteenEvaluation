@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
     addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback,
-    tamperFeedback, getLightFeedbacks, getFeedbackPhoto,
+    getFeedbackPhoto,
     getAllStalls, addStall, deleteStall, editStall,
     getStallByToken, verifyStallEmail
 } = require('./db');
@@ -120,15 +120,6 @@ router.get('/feedbacks', async (req, res) => {
     }
 });
 
-router.get('/feedbacks/light', async (req, res) => {
-    try {
-        const rows = await getLightFeedbacks();
-        res.json(rows);
-    } catch (e) {
-        res.status(500).json({ error: "Couldn't fetch light feedback." });
-    }
-});
-
 router.get('/feedback/:id/photo', async (req, res) => {
     try {
         const row = await getFeedbackPhoto(req.params.id);
@@ -181,17 +172,6 @@ router.put('/feedback/:id/quarantine', async (req, res) => {
     } catch (err) {
         console.error("Quarantine Error:", err.message);
         res.status(500).json({ error: "Server Error" });
-    }
-});
-
-router.put('/hack/:id', async (req, res) => {
-    try {
-        const { rating, comment } = req.body;
-        await tamperFeedback(req.params.id, rating, comment);
-        res.json({ message: "Database Altered (HACKED)" });
-    } catch (err) {
-        console.error("Hack Error:", err.message);
-        res.status(500).json({ error: "Hack Failed" });
     }
 });
 
@@ -353,13 +333,17 @@ router.post('/stalls', async (req, res) => {
         if (email) {
             const baseUrl = process.env.BACKEND_URL || 'http://localhost:4000';
             const verifyUrl = `${baseUrl}/api/stalls/verify-email?token=${verificationToken}`;
-            transporter.sendMail({
-                from: '"UA Canteen Bot" <' + process.env.EMAIL_USER + '>',
-                to: email,
-                subject: `Action Required: Verify ${name} Email`,
-                text: `Please verify your email for ${name} by clicking: ${verifyUrl}`,
-                html: getVerificationEmailTemplate(name, verifyUrl)
-            }).catch(console.error);
+            try {
+                await transporter.sendMail({
+                    from: '"UA Canteen Bot" <' + process.env.EMAIL_USER + '>',
+                    to: email,
+                    subject: `Action Required: Verify ${name} Email`,
+                    text: `Please verify your email for ${name} by clicking: ${verifyUrl}`,
+                    html: getVerificationEmailTemplate(name, verifyUrl)
+                });
+            } catch (emailErr) {
+                console.error("Email sending failed:", emailErr);
+            }
         }
 
         res.json(newStall);
@@ -400,13 +384,17 @@ router.put('/stalls/:id', async (req, res) => {
         if (emailChanged && email) {
             const baseUrl = process.env.BACKEND_URL || 'http://localhost:4000';
             const verifyUrl = `${baseUrl}/api/stalls/verify-email?token=${verificationToken}`;
-            transporter.sendMail({
-                from: '"UA Canteen Bot" <' + process.env.EMAIL_USER + '>',
-                to: email,
-                subject: `Action Required: Verify ${name} Email`,
-                text: `Please verify your email for ${name} by clicking: ${verifyUrl}`,
-                html: getVerificationEmailTemplate(name, verifyUrl)
-            }).catch(console.error);
+            try {
+                await transporter.sendMail({
+                    from: '"UA Canteen Bot" <' + process.env.EMAIL_USER + '>',
+                    to: email,
+                    subject: `Action Required: Verify ${name} Email`,
+                    text: `Please verify your email for ${name} by clicking: ${verifyUrl}`,
+                    html: getVerificationEmailTemplate(name, verifyUrl)
+                });
+            } catch (emailErr) {
+                console.error("Email sending failed:", emailErr);
+            }
         }
 
         res.json(updatedStall);

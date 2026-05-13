@@ -183,17 +183,6 @@ export default function LandingPage({ navigate }) {
       <footer style={{ backgroundColor: colors.navy, color: colors.white, padding: '40px 20px', textAlign: 'center', fontSize: '14px' }}>
         <p style={{ margin: 0, fontWeight: 500 }}>© 2026 University of the Assumption. All Rights Reserved.</p>
         <p style={{ margin: '8px 0 0 0', color: '#94A3B8', fontSize: '13px' }}>Cryptographically Secured EdDSA System</p>
-        
-        {/* Added hide-on-mobile class here! */}
-        <div className="hide-on-mobile" style={{ marginTop: '32px' }}>
-          <button 
-            onClick={() => navigate('hacker')}
-            style={{ background: 'none', border: 'none', color: '#334155', fontSize: '12px', cursor: 'pointer', letterSpacing: '0.05em', fontFamily: 'inherit' }}
-            title="Database Simulation Tool"
-          >
-            SYSTEM DIAGNOSTICS
-          </button>
-        </div>
       </footer>
 
     </div>

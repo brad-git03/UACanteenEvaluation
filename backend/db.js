@@ -85,18 +85,6 @@ async function deleteFeedback(id) {
     await pool.query("DELETE FROM feedbacks WHERE id = $1", [id]);
 }
 
-async function tamperFeedback(id, rating, comment) {
-    await pool.query(
-        "UPDATE feedbacks SET rating = $1, comment = $2 WHERE id = $3",
-        [rating, comment, id]
-    );
-}
-
-async function getLightFeedbacks() {
-    const result = await pool.query(`SELECT id, customer_name, rating, comment, is_quarantined FROM feedbacks ORDER BY created_at DESC`);
-    return result.rows;
-}
-
 async function getAllStalls() {
     const result = await pool.query(`SELECT * FROM stalls ORDER BY name ASC`);
     return result.rows;
@@ -135,7 +123,7 @@ async function deleteStall(id) {
 
 module.exports = {
     pool, addFeedback, getAllFeedback, deleteFeedback, quarantineFeedback,
-    tamperFeedback, getLightFeedbacks, getFeedbackPhoto,
+    getFeedbackPhoto,
     getAllStalls, addStall, editStall, deleteStall,
     getStallByToken, verifyStallEmail
 };

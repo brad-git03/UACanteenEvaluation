@@ -131,25 +131,3 @@ export const quarantineFeedback = async (id) => {
     const response = await fetch(`${API_URL}/feedback/${id}/quarantine`, { method: 'PUT' });
     return response.json();
 };
-
-// --- HACKER SIMULATION ROUTES ---
-
-export const getLightFeedbacks = async () => {
-    const response = await fetch(`${API_URL}/feedbacks/light`);
-    if (!response.ok) {
-        throw new Error('Failed to fetch light feedbacks');
-    }
-    return response.json();
-};
-
-export const tamperFeedback = async (id, rating, comment) => {
-    const response = await fetch(`${API_URL}/hack/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rating, comment })
-    });
-    if (!response.ok) {
-        throw new Error('Failed to hack feedback');
-    }
-    return response.json();
-};

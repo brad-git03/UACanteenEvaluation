@@ -4,7 +4,6 @@ import FeedbackForm from "./components/FeedbackForm";
 import AdminLogin from "./components/AdminLogin";
 import AdminDashboard from "./components/AdminDashboard";
 import VerifyReceipt from "./components/VerifyReceipt"; 
-import HackerSimulation from "./components/HackerSimulation";
 import Login from "./components/Login";
 
 export default function App() {
@@ -37,7 +36,6 @@ export default function App() {
       
       {/* OTHER ROUTES */}
       {currentView === "verify_receipt" && <VerifyReceipt navigate={navigate} />}
-      {currentView === "hacker" && <HackerSimulation navigate={navigate} />}
     </>
   );
 }
