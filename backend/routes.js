@@ -12,9 +12,9 @@ const crypto = require('crypto');
 
 const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    family: 4, // <-- Ensure this is in the GitHub code
+    port: 587, // Changed from 465
+    secure: false, // Must be false for port 587 (it upgrades to secure via STARTTLS)
+    family: 4,
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
