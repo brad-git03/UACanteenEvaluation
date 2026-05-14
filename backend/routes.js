@@ -14,6 +14,7 @@ const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 465,
     secure: true,
+    family: 4, // <-- Ensure this is in the GitHub code
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
@@ -202,7 +203,7 @@ const getVerifiedFeedbacks = (feedbacks) => {
 
 router.get('/reports/overall', async (req, res) => {
     try {
-        const rawFeedbacks = await getAllFeedback(); 
+        const rawFeedbacks = await getAllFeedback();
         const verifiedFeedbacks = getVerifiedFeedbacks(rawFeedbacks);
         const reportData = await analyzeFeedbackData('UA Main Canteen System', verifiedFeedbacks);
         generateStoreReport(reportData, res);
@@ -219,13 +220,13 @@ router.get('/reports/stall/:id', async (req, res) => {
         if (!stall) return res.status(404).json({ error: "Stall not found" });
 
         // Extract stall's feedbacks directly from comment cryptographic payload
-        const rawFeedbacks = await getAllFeedback(); 
+        const rawFeedbacks = await getAllFeedback();
         const verifiedFeedbacks = getVerifiedFeedbacks(rawFeedbacks);
         const stallFeedbacks = verifiedFeedbacks.filter(f => {
             const match = f.comment?.match(/\[Stall: (.*?)\]/);
             return match ? match[1] === stall.name : false;
         });
-        
+
         const reportData = await analyzeFeedbackData(stall.name, stallFeedbacks);
         generateStoreReport(reportData, res);
     } catch (err) {
@@ -264,15 +265,15 @@ router.post('/stalls/:id/send-report', async (req, res) => {
         if (!stall) return res.status(404).json({ error: "Stall not found" });
         if (!stall.email || !stall.is_email_verified) return res.status(400).json({ error: "Stall does not have a verified email." });
 
-        const rawFeedbacks = await getAllFeedback(); 
+        const rawFeedbacks = await getAllFeedback();
         const verifiedFeedbacks = getVerifiedFeedbacks(rawFeedbacks);
         const stallFeedbacks = verifiedFeedbacks.filter(f => {
             const match = f.comment?.match(/\[Stall: (.*?)\]/);
             return match ? match[1] === stall.name : false;
         });
-        
+
         const reportData = await analyzeFeedbackData(stall.name, stallFeedbacks);
-        
+
         // Generate PDF Buffer
         const pdfBuffer = await generateStoreReport(reportData);
 
@@ -334,7 +335,7 @@ router.post('/stalls', async (req, res) => {
         }
 
         const newStall = await addStall(name, image || null, email || null, verificationToken);
-        
+
         if (email) {
             const baseUrl = process.env.BACKEND_URL || 'http://localhost:4000';
             const verifyUrl = `${baseUrl}/api/stalls/verify-email?token=${verificationToken}`;
@@ -385,7 +386,7 @@ router.put('/stalls/:id', async (req, res) => {
         }
 
         const updatedStall = await editStall(req.params.id, name, image || null, email || null, isVerified, verificationToken);
-        
+
         if (emailChanged && email) {
             const baseUrl = process.env.BACKEND_URL || 'http://localhost:4000';
             const verifyUrl = `${baseUrl}/api/stalls/verify-email?token=${verificationToken}`;
