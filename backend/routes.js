@@ -7,21 +7,9 @@ const {
     getStallByToken, verifyStallEmail
 } = require('./db');
 const { verifySignature } = require('./eddsa');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
+const resend = new Resend(process.env.RESEND_API_KEY);
 const crypto = require('crypto');
-
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    },
-    tls: {
-        rejectUnauthorized: false
-    }
-});
 
 // CLOUDINARY CONFIGURATION
 const cloudinary = require('cloudinary').v2;
@@ -276,17 +264,17 @@ router.post('/stalls/:id/send-report', async (req, res) => {
         // Generate PDF Buffer
         const pdfBuffer = await generateStoreReport(reportData);
 
-        // Send Email
-        await transporter.sendMail({
-            from: '"UA Canteen Bot" <' + process.env.EMAIL_USER + '>',
+        // Send Email using Resend
+        await resend.emails.send({
+            from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
             to: stall.email,
             subject: `Automated Evaluation Report: ${stall.name}`,
+            html: `<p>Hello ${stall.name} owner,</p><p>Here is your automated stall evaluation update.</p><p><strong>AI Summary & Recommendations:</strong><br/>${reportData.ai_summary || 'Please find the details in the attached report.'}</p><p>Best,<br/>UA Canteen System</p>`,
             text: `Hello ${stall.name} owner,\n\nHere is your automated stall evaluation update.\n\nAI Summary & Recommendations:\n${reportData.ai_summary || 'Please find the details in the attached report.'}\n\nBest,\nUA Canteen System`,
             attachments: [
                 {
                     filename: `Evaluation_Report_${stall.name.replace(/\s+/g, '_')}.pdf`,
                     content: pdfBuffer,
-                    contentType: 'application/pdf'
                 }
             ]
         });
@@ -339,13 +327,14 @@ router.post('/stalls', async (req, res) => {
             const baseUrl = process.env.BACKEND_URL || 'http://localhost:4000';
             const verifyUrl = `${baseUrl}/api/stalls/verify-email?token=${verificationToken}`;
             try {
-                await transporter.sendMail({
-                    from: '"UA Canteen Bot" <' + process.env.EMAIL_USER + '>',
+                const data = await resend.emails.send({
+                    from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
                     to: email,
                     subject: `Action Required: Verify ${name} Email`,
                     text: `Please verify your email for ${name} by clicking: ${verifyUrl}`,
                     html: getVerificationEmailTemplate(name, verifyUrl)
                 });
+                if (data.error) console.error("Resend Error:", data.error);
             } catch (emailErr) {
                 console.error("Email sending failed:", emailErr);
             }
@@ -390,13 +379,14 @@ router.put('/stalls/:id', async (req, res) => {
             const baseUrl = process.env.BACKEND_URL || 'http://localhost:4000';
             const verifyUrl = `${baseUrl}/api/stalls/verify-email?token=${verificationToken}`;
             try {
-                await transporter.sendMail({
-                    from: '"UA Canteen Bot" <' + process.env.EMAIL_USER + '>',
+                const data = await resend.emails.send({
+                    from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
                     to: email,
                     subject: `Action Required: Verify ${name} Email`,
                     text: `Please verify your email for ${name} by clicking: ${verifyUrl}`,
                     html: getVerificationEmailTemplate(name, verifyUrl)
                 });
+                if (data.error) console.error("Resend Error:", data.error);
             } catch (emailErr) {
                 console.error("Email sending failed:", emailErr);
             }
